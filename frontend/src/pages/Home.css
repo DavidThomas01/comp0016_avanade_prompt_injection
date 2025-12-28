@@ -1,0 +1,402 @@
+/* ============================================
+   Home Page Layout
+   ============================================ */
+.home {
+  flex: 1;
+  padding: var(--space-4);
+  width: 100%;
+}
+
+.home__grid {
+  display: grid;
+  gap: var(--space-5);
+  width: 100%;
+  min-height: calc(100dvh - var(--header-h) - var(--space-4) * 2);
+}
+
+/* ============================================
+   Main Content Area
+   ============================================ */
+.home__main {
+  background: var(--c-surface);
+  border-left: 4px solid var(--c-accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: var(--space-5);
+}
+
+.home__title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--c-text);
+  margin-bottom: var(--space-4);
+  letter-spacing: -0.02em;
+}
+
+.home__prose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.home__prose p {
+  font-size: var(--text-base);
+  color: var(--c-text);
+  line-height: 1.7;
+}
+
+.home__section {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--c-border);
+}
+
+.home__subtitle {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--c-text);
+  margin-bottom: var(--space-4);
+}
+
+/* ============================================
+   Vulnerability Cards Grid
+   ============================================ */
+.vuln-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.vuln-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  transition: all var(--transition);
+}
+
+.vuln-card:hover {
+  border-color: var(--c-accent);
+  box-shadow: var(--shadow);
+}
+
+.vuln-card__icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  background: color-mix(in srgb, var(--c-accent) 12%, transparent);
+  color: var(--c-accent);
+  border-radius: var(--radius);
+}
+
+.vuln-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.vuln-card__title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--c-text);
+  margin-bottom: 2px;
+}
+
+.vuln-card__desc {
+  font-size: var(--text-sm);
+  color: var(--c-text-muted);
+  line-height: 1.5;
+}
+
+/* ============================================
+   Sidebar
+   ============================================ */
+.home__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sidebar-section__title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--c-text);
+  margin-bottom: var(--space-4);
+}
+
+/* Attack Flow */
+.flow {
+  display: flex;
+  flex-direction: column;
+}
+
+.flow__step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+
+.flow__step:last-child {
+  padding-bottom: 0;
+}
+
+.flow__num {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  background: var(--c-accent);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  border-radius: var(--radius);
+}
+
+.flow__line {
+  position: absolute;
+  left: 15px;
+  top: 36px;
+  width: 2px;
+  height: calc(100% - 40px);
+  background: var(--c-text);
+}
+
+.flow__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 4px;
+}
+
+.flow__title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.flow__desc {
+  font-size: var(--text-sm);
+  color: var(--c-text-muted);
+}
+
+/* ============================================
+   Callout Boxes
+   ============================================ */
+.callout {
+  padding: var(--space-3);
+  border-radius: var(--radius);
+}
+
+.callout--warning {
+  background: color-mix(in srgb, var(--c-accent) 8%, transparent);
+  border: 1px solid var(--c-accent);
+}
+
+.callout--success {
+  background: color-mix(in srgb, var(--c-success) 8%, transparent);
+  border: 1px solid var(--c-success);
+}
+
+.callout__label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--c-text);
+  margin-bottom: var(--space-2);
+}
+
+.callout__text {
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--c-text);
+  line-height: 1.5;
+}
+
+/* Defense List */
+.defense-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.defense-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--c-text);
+}
+
+.defense-list__item::before {
+  content: '';
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  background: var(--c-success);
+  border-radius: 2px;
+}
+
+/* ============================================
+   Responsive Layout
+   ============================================ */
+
+/* Small screens: stack everything */
+@media (max-width: 639px) {
+  .home { padding: var(--space-3); }
+  .home__main { padding: var(--space-4); }
+}
+
+/* Medium screens: 2-column vuln grid */
+@media (min-width: 640px) {
+  .vuln-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Large screens: sidebar layout + more spacing */
+@media (min-width: 1024px) {
+  .home {
+    padding: var(--space-5);
+  }
+
+  .home__grid {
+    grid-template-columns: 1fr 340px;
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  .home__main {
+    padding: var(--space-6);
+  }
+
+  .home__title {
+    margin-bottom: var(--space-5);
+  }
+
+  .home__prose {
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .home__section {
+    padding-top: var(--space-5);
+  }
+
+  .home__subtitle {
+    margin-bottom: var(--space-5);
+  }
+
+  .home__sidebar {
+    gap: var(--space-5);
+  }
+
+  .sidebar-section__title {
+    margin-bottom: var(--space-5);
+  }
+
+  .flow__step {
+    padding-bottom: var(--space-5);
+  }
+
+  .callout {
+    padding: var(--space-4);
+  }
+
+  .defense-list {
+    gap: var(--space-3);
+  }
+
+  /* Make sidebar sticky */
+  .home__sidebar {
+    position: sticky;
+    top: calc(var(--header-h) + var(--space-5));
+  }
+}
+
+/* Extra large screens */
+@media (min-width: 1280px) {
+  .home {
+    padding: var(--space-6);
+  }
+
+  .home__grid {
+    grid-template-columns: 1fr 400px;
+  }
+
+  .vuln-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+  }
+
+  .vuln-card {
+    padding: var(--space-4);
+  }
+
+  .vuln-card__icon {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+/* Ultra-wide screens */
+@media (min-width: 1600px) {
+  .home__grid {
+    grid-template-columns: 1fr 450px;
+  }
+
+  .vuln-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-5);
+  }
+
+  .home__main {
+    padding: var(--space-6) calc(var(--space-6) * 1.5);
+  }
+
+  .flow__step {
+    padding-bottom: var(--space-6);
+  }
+
+  .flow__num {
+    width: 36px;
+    height: 36px;
+  }
+
+  .flow__line {
+    left: 17px;
+    top: 40px;
+    height: calc(100% - 44px);
+  }
+}
+
+/* Super ultra-wide */
+@media (min-width: 1920px) {
+  .home__grid {
+    grid-template-columns: 1fr 500px;
+  }
+
+  .home__main {
+    padding: calc(var(--space-6) * 1.25) calc(var(--space-6) * 1.75);
+  }
+
+  .home__sidebar {
+    gap: var(--space-6);
+  }
+
+  .callout {
+    padding: var(--space-5);
+  }
+
+  .callout__label {
+    margin-bottom: var(--space-3);
+  }
+
+  .defense-list {
+    gap: var(--space-3);
+  }
+}
