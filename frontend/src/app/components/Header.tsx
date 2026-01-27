@@ -45,6 +45,16 @@ export function Header() {
           >
             Testing
           </Link>
+          <Link
+            to="/prompt-enhancer"
+            className={`px-4 py-2 rounded transition-colors ${
+              isActive('/prompt-enhancer') 
+                ? 'bg-gray-800 text-white' 
+                : 'text-gray-300 hover:bg-gray-800'
+            }`}
+          >
+            Prompt Enhancer
+          </Link>
         </nav>
       </div>
     </header>
