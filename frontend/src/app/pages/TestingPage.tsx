@@ -73,7 +73,7 @@ export function TestingPage() {
   const createSuite = () => {
     if (!canCreateSuite) return;
 
-    const id = `suite-${Date.now()}`;
+    const id = `suite-${crypto.randomUUID()}`;
     setSuites(prev => [
       ...prev,
       { id, name: newSuiteName.trim(), description: newSuiteDescription.trim() },
