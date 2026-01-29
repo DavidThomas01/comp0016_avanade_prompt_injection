@@ -414,12 +414,12 @@ export function TestingPage() {
       </TabsContent>
 
       <TabsContent value="custom">
-        <Textarea
+        <input
+          type="password"
           value={newTestApiKey}
           onChange={e => setNewTestApiKey(e.target.value)}
           placeholder="API key"
           className="mt-2"
-          rows={3}
         />
       </TabsContent>
     </Tabs>
