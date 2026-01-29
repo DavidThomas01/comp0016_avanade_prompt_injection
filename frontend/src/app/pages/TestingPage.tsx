@@ -466,7 +466,12 @@ export function TestingPage() {
     </div>
 
     <DialogFooter>
-      <button onClick={() => setIsAddTestOpen(false)}>Cancel</button>
+      <button
+        onClick={() => setIsAddTestOpen(false)}
+        className="px-4 py-2 rounded border"
+      >
+        Cancel
+      </button>
       <button
         onClick={createTest}
         disabled={!canCreateTest}
