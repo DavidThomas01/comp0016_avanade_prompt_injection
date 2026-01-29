@@ -284,6 +284,7 @@ export function TestingPage() {
               <button
                 onClick={() => setIsCreateSuiteOpen(true)}
                 className="h-12 w-12 border-2 border-dashed rounded flex items-center justify-center text-gray-500 hover:text-orange-500 hover:border-orange-500"
+                aria-label="Add new folder"
               >
                 <Plus className="w-6 h-6" />
               </button>
