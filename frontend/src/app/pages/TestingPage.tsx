@@ -117,11 +117,19 @@ export function TestingPage() {
   );
 };
 
+  const generateTestId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    // Fallback for environments without crypto.randomUUID
+    return Math.random().toString(36).slice(2);
+  };
+
   const createTest = () => {
     if (!canCreateTest) return;
 
     const newTest: Test = {
-      id: `test-${Date.now()}`,
+      id: `test-${generateTestId()}`,
       name: newTestTitle.trim(),
       suiteId: targetSuiteId,
       prompt: '',
