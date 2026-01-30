@@ -4,12 +4,15 @@ export function Header() {
   const location = useLocation();
   
   const isActive = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/' || location.pathname.startsWith('/vulnerability/');
+    }
     return location.pathname === path;
   };
   
   return (
     <header className="bg-gray-900 text-white px-6 py-4">
-      <div className="flex items-center justify-between max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <div className="text-xl font-semibold">Prompt Injection Protection</div>
         </div>
@@ -24,16 +27,6 @@ export function Header() {
             }`}
           >
             Home
-          </Link>
-          <Link
-            to="/vulnerabilities"
-            className={`px-4 py-2 rounded transition-colors ${
-              isActive('/vulnerabilities') || location.pathname.startsWith('/vulnerability/')
-                ? 'bg-gray-800 text-white' 
-                : 'text-gray-300 hover:bg-gray-800'
-            }`}
-          >
-            Vulnerabilities
           </Link>
           <Link
             to="/testing"

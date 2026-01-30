@@ -12,7 +12,7 @@ export default function App() {
         <Header />
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/vulnerabilities" element={<Navigate to="/vulnerability/direct-prompt-injection" replace />} />
+          <Route path="/vulnerabilities" element={<Navigate to="/" replace />} />
           <Route path="/vulnerability/:id" element={<VulnerabilityPage />} />
           <Route path="/testing" element={<TestingPage />} />
           <Route path="/prompt-enhancer" element={<PromptEnhancerPage />} />
