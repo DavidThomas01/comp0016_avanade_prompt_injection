@@ -1,12 +1,4 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
-import { vulnerabilities } from '../data/vulnerabilities';
 
 export function Header() {
   const location = useLocation();
