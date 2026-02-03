@@ -22,12 +22,13 @@ export function Header() {
             to="/"
             className={`px-4 py-2 rounded transition-colors ${
               isActive('/') 
-                ? 'bg-orange-500 text-white' 
+                ? 'bg-gray-800 text-white' 
                 : 'text-gray-300 hover:bg-gray-800'
             }`}
           >
             Home
           </Link>
+          
           <Link
             to="/testing"
             className={`px-4 py-2 rounded transition-colors ${

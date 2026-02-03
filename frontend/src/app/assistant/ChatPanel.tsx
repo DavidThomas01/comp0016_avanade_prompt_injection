@@ -35,6 +35,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     saveThread(messages);
@@ -47,6 +48,16 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
     });
   }, [messages, isSending]);
 
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const maxHeight = variant === 'compact' ? 120 : 200;
+      textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+    }
+  }, [input, variant]);
+
   const canSend = input.trim().length > 0 && !isSending;
 
   const messageCount = useMemo(
@@ -58,6 +69,12 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
     if (!canSend) return;
     const trimmed = input.trim();
     setInput('');
+    
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+    
     const userMessage = createMessage('user', trimmed);
     setMessages(prev => [...prev, userMessage]);
     setIsSending(true);
@@ -138,7 +155,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
         <div
           ref={scrollRef}
           className={`space-y-4 overflow-y-auto px-4 ${
-            variant === 'compact' ? 'h-[380px]' : 'h-[calc(100vh-220px)]'
+            variant === 'compact' ? 'h-[380px]' : 'h-[calc(100vh-400px)]'
           } py-4`}
         >
           {messages.map(message => (
@@ -225,12 +242,13 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
       <div className="border-t border-gray-100 px-4 py-3">
         <div className="flex items-end gap-2">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={event => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
-            rows={variant === 'compact' ? 2 : 3}
+            rows={1}
             placeholder="Ask about vulnerabilities, mitigations, or testing..."
-            className="flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none"
+            className="flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none overflow-y-auto min-h-[40px]"
           />
           <button
             onClick={handleSend}

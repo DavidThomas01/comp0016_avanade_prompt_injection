@@ -34,13 +34,7 @@ export function HomePage() {
                     <div className="flex items-start">
                       <div className="flex-shrink-0 mr-3 mt-0.5">
                         <AlertTriangle
-                          className={`w-4 h-4 ${
-                            vuln.impactLevel === 'high'
-                              ? 'text-red-500'
-                              : vuln.impactLevel === 'medium'
-                              ? 'text-yellow-500'
-                              : 'text-blue-500'
-                          }`}
+                          className={`w-4 h-4 text-red-500`}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
