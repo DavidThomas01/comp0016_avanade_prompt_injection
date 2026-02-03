@@ -248,7 +248,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             onKeyDown={handleKeyDown}
             rows={1}
             placeholder="Ask about vulnerabilities, mitigations, or testing..."
-            className="flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none overflow-hidden min-h-[40px]"
+            className="flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none overflow-y-auto min-h-[40px]"
           />
           <button
             onClick={handleSend}
