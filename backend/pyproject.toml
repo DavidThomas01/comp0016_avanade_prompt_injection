@@ -10,6 +10,9 @@ dependencies = [
     "pydantic",
     "sqlmodel",
     "httpx",
+    "python-dotenv",
+    "pytest",
+    "pytest-asyncio"
 ]
 
 [tool.uvicorn]
