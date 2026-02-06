@@ -32,24 +32,24 @@ MODEL_REGISTRY = {
         provider="anthropic",
         endpoint="https://comp0016-team28-promptinjectionprotection.services.ai.azure.com/anthropic/v1/messages",
         api_key="FOUNDRY_CLAUDE_KEY",
-        model_name="claude-sonnet"
+        model_name="claude-sonnet-4-5"
     ),
     "llama": ModelConfig(
         provider="openai",
         endpoint="https://comp0016-team28-promptinjectionprotection.services.ai.azure.com/models/chat/completions?api-version=2024-05-01-preview",
         api_key="FOUNDRY_LLAMA_KEY",
-        model_name="llama-3"
+        model_name="Llama-3.3-70B-Instruct"
     ),
     "phi": ModelConfig(
         provider="openai",
         endpoint="https://comp0016-team28-promptinjectionprotection.services.ai.azure.com/models/chat/completions?api-version=2024-05-01-preview",
         api_key="FOUNDRY_PHI_KEY",
-        model_name="phi-3"
+        model_name="Phi-4"
     ),
     "deepseek": ModelConfig(
         provider="openai",
         endpoint="https://comp0016-team28-promptinjectionprotection.services.ai.azure.com/models/chat/completions?api-version=2024-05-01-preview",
         api_key="FOUNDRY_DEEPSEEK_KEY",
-        model_name="deepseek"
+        model_name="DeepSeek-V3.1"
     ),
 }
