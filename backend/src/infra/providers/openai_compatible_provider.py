@@ -15,7 +15,7 @@ class OpenAICompatibleProvider(ModelProvider):
 		config = MODEL_REGISTRY.get(request.model)
 		if not config:
 			raise ValueError(f"Unknown model '{request.model}'.")
-		if config.provider != "openai":
+		if config.provider != "openai-compatible":
 			raise ValueError(f"Model '{request.model}' is not an OpenAI-compatible model.")
 		if self._is_responses_endpoint(config.endpoint):
 			raise ValueError(f"Model '{request.model}' uses the responses endpoint.")
