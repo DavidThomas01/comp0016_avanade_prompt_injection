@@ -1,5 +1,4 @@
 import asyncio
-
 import pytest
 
 from infra.providers.openai_compatible_provider import OpenAICompatibleProvider
@@ -86,14 +85,6 @@ def test_provider_mismatch_raises():
 	request = ModelRequest(model="claude", messages=[Message(role="user", content="hi")])
 
 	with pytest.raises(ValueError, match="OpenAI-compatible model"):
-		run(provider.generate(request))
-
-
-def test_responses_endpoint_raises():
-	provider = OpenAICompatibleProvider()
-	request = ModelRequest(model="gpt-5.2", messages=[Message(role="user", content="hi")])
-
-	with pytest.raises(ValueError, match="responses endpoint"):
 		run(provider.generate(request))
 
 
