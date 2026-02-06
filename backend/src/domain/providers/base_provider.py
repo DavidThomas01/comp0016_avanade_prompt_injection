@@ -3,15 +3,11 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
 
 
-# ---------- Messages ----------
-
 @dataclass
 class Message:
     role: str  # "system" | "user" | "assistant"
     content: str
 
-
-# ---------- Request ----------
 
 @dataclass
 class ModelRequest:
@@ -22,16 +18,12 @@ class ModelRequest:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-# ---------- Response ----------
-
 @dataclass
 class ModelResponse:
     text: str
     raw: Optional[Any] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-
-# ---------- Provider Interface ----------
 
 class ModelProvider(ABC):
 
