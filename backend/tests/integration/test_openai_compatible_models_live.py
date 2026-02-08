@@ -62,3 +62,21 @@ async def test_deepseek_live_call():
     assert len(response.text) > 0
     
 
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.getenv("FOUNDRY_MISTRAL_KEY"),
+    reason="Missing API key"
+)
+async def test_deepseek_live_call():
+    provider = OpenAICompatibleProvider()
+
+    response = await provider.generate(
+        ModelRequest(
+            model="mistral",
+            messages=[Message(role="user", content="Say hello")]
+        )
+    )
+
+    assert response.text is not None
+    assert len(response.text) > 0
+    
