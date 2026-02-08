@@ -34,11 +34,23 @@ MODEL_REGISTRY = {
         api_key="FOUNDRY_O4NANO_KEY",
         model_name="o4-nano"
     ),
-    "claude": ModelConfig(
+    "claude-sonnet-4-5": ModelConfig(
         provider="anthropic",
         endpoint="https://comp0016-team28-promptinjectionprotection.services.ai.azure.com/anthropic/v1/messages",
-        api_key="FOUNDRY_CLAUDE_KEY",
+        api_key="FOUNDRY_CLAUDESONNET45_KEY",
         model_name="claude-sonnet-4-5"
+    ),
+    "claude-haiku-4-5": ModelConfig(
+        provider="anthropic",
+        endpoint="https://comp0016-team28-promptinjectionprotection.services.ai.azure.com/anthropic/v1/messages",
+        api_key="FOUNDRY_CLAUDEHAIKU45_KEY",
+        model_name="claude-haiku-4-5"
+    ),
+    "claude-opus-4-1": ModelConfig(
+        provider="anthropic",
+        endpoint="https://comp0016-team28-promptinjectionprotection.services.ai.azure.com/anthropic/v1/messages",
+        api_key="FOUNDRY_CLAUDEOPUS41_KEY",
+        model_name="claude-opus-4-1"
     ),
     "llama": ModelConfig(
         provider="openai-compatible",
