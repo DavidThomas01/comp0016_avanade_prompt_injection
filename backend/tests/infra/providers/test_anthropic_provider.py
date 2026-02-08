@@ -39,7 +39,7 @@ def run(coro):
 
 
 def test_generate_payload_with_system_prompt(monkeypatch):
-	monkeypatch.setenv("FOUNDRY_CLAUDE_KEY", "test-key")
+	monkeypatch.setenv("FOUNDRY_CLAUDESONNET45_KEY", "test-key")
 	DummyAsyncClient.next_response = DummyResponse(
 		payload={"content": [{"type": "text", "text": "ok"}]}
 	)
@@ -50,7 +50,7 @@ def test_generate_payload_with_system_prompt(monkeypatch):
 
 	provider = AnthropicProvider()
 	request = ModelRequest(
-		model="claude",
+		model="claude-sonnet-4-5",
 		messages=[Message(role="user", content="hello")],
 		system_prompt="system-msg",
 		temperature=0.3,
@@ -90,16 +90,16 @@ def test_provider_mismatch_raises():
 
 
 def test_missing_api_key_raises(monkeypatch):
-	monkeypatch.delenv("FOUNDRY_CLAUDE_KEY", raising=False)
+	monkeypatch.delenv("FOUNDRY_CLAUDESONNET45_KEY", raising=False)
 	provider = AnthropicProvider()
-	request = ModelRequest(model="claude", messages=[Message(role="user", content="hi")])
+	request = ModelRequest(model="claude-sonnet-4-5", messages=[Message(role="user", content="hi")])
 
 	with pytest.raises(ValueError, match="Missing API key"):
 		run(provider.generate(request))
 
 
 def test_http_error_raises(monkeypatch):
-	monkeypatch.setenv("FOUNDRY_CLAUDE_KEY", "test-key")
+	monkeypatch.setenv("FOUNDRY_CLAUDESONNET45_KEY", "test-key")
 	DummyAsyncClient.next_response = DummyResponse(status_code=429, text="rate limit")
 
 	import infra.providers.anthropic_provider as provider_module
@@ -107,7 +107,7 @@ def test_http_error_raises(monkeypatch):
 	monkeypatch.setattr(provider_module.httpx, "AsyncClient", DummyAsyncClient)
 
 	provider = AnthropicProvider()
-	request = ModelRequest(model="claude", messages=[Message(role="user", content="hi")])
+	request = ModelRequest(model="claude-sonnet-4-5", messages=[Message(role="user", content="hi")])
 
 	with pytest.raises(RuntimeError, match="Anthropic provider error"):
 		run(provider.generate(request))
