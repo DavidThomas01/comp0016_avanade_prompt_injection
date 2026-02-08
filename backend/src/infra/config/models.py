@@ -22,6 +22,12 @@ MODEL_REGISTRY = {
         api_key="FOUNDRY_GPT51_KEY",
         model_name="gpt-5.1"
     ),
+    "gpt-5-nano": ModelConfig(
+        provider="openai",
+        endpoint="https://comp0016-team28-promptinjectionprotection.cognitiveservices.azure.com/openai/deployments/gpt-5-nano/chat/completions?api-version=2025-01-01-preview",
+        api_key="FOUNDRY_GPT5NANO_KEY",
+        model_name="gpt-5-nano"  
+    ),
     "o4-nano": ModelConfig(
         provider="openai",
         endpoint="https://comp0016-team28-promptinjectionprotection.cognitiveservices.azure.com/openai/deployments/o4-mini/chat/completions?api-version=2025-01-01-preview",
