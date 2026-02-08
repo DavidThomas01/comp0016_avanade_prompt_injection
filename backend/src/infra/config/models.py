@@ -70,4 +70,10 @@ MODEL_REGISTRY = {
         api_key="FOUNDRY_DEEPSEEK_KEY",
         model_name="DeepSeek-V3.1"
     ),
+    "mistral": ModelConfig(
+        provider="openai-compatible",
+        endpoint="https://comp0016-team28-promptinjectionprotection.services.ai.azure.com/models/chat/completions?api-version=2024-05-01-preview",
+        api_key="FOUNDRY_MISTRAL_KEY",
+        model_name="mistral-small-2503"
+    ),
 }
