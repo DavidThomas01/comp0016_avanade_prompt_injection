@@ -1,0 +1,20 @@
+[project]
+name = "prompt-injection-backend"
+version = "0.1.0"
+description = "prompt injection testing platform"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "sqlmodel",
+    "httpx",
+    "python-dotenv",
+    "pytest",
+    "pytest-asyncio"
+]
+
+[tool.uvicorn]
+app = "src.api.server:app"
+reload = true
