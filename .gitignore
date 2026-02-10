@@ -1,5 +1,23 @@
-node_modules/
+# Python caches
 __pycache__/
 *.pyc
+
+# Local env / venv
 .venv/
+venv/
 .env
+
+# Local DB
+*.sqlite
+*.db
+data.sqlite
+
+*.zip
+.venv/
+**/.venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+*.pyc
+dist/
+build/
