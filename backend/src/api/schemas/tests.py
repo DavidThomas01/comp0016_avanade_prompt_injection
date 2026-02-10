@@ -19,7 +19,7 @@ class TestCreate(BaseModel):
 
 
 class TestOut(BaseModel):
-    # ✅ Pydantic v2 config (NO puede coexistir con un field llamado model_config)
+    # Pydantic v2 configuration (cannot coexist with a field named `model_config`)
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: str
@@ -30,7 +30,7 @@ class TestOut(BaseModel):
     expected_behavior: str = Field(alias="expectedBehavior")
     required_mitigations: List[str] = Field(alias="requiredMitigations")
 
-    # ✅ Renombramos el campo interno para NO chocar con model_config (reservado)
+    # Internal field renamed to avoid collision with `model_config` (reserved name)
     model_cfg: Dict[str, Any] = Field(alias="modelConfig")
 
     created_at: datetime = Field(alias="createdAt")
