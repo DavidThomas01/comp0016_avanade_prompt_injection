@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: prompt-injection-platform-backend
+Version: 0.1.0
+Summary: Backend for the Prompt Injection Testing Platform
+Requires-Python: >=3.10
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn[standard]>=0.27
+Requires-Dist: sqlmodel>=0.0.16
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: httpx>=0.27
+Requires-Dist: python-dotenv>=1.0
+Requires-Dist: pydantic>=2.6
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: anyio>=4.0; extra == "dev"
+Provides-Extra: integration
+Requires-Dist: openai>=1.0; extra == "integration"
+Requires-Dist: anthropic>=0.25; extra == "integration"
