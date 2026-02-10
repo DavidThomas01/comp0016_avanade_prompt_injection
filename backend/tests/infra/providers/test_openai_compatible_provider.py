@@ -82,7 +82,7 @@ def test_missing_model_raises():
 
 def test_provider_mismatch_raises():
 	provider = OpenAICompatibleProvider()
-	request = ModelRequest(model="claude", messages=[Message(role="user", content="hi")])
+	request = ModelRequest(model="claude-sonnet-4-5", messages=[Message(role="user", content="hi")])
 
 	with pytest.raises(ValueError, match="OpenAI-compatible model"):
 		run(provider.generate(request))

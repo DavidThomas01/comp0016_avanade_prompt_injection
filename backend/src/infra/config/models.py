@@ -7,6 +7,7 @@ class ModelConfig:
     endpoint: str
     api_key: str
     model_name: str
+    display_name: str
 
 
 MODEL_REGISTRY = {
