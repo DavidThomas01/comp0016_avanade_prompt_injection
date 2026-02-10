@@ -76,4 +76,10 @@ MODEL_REGISTRY = {
         api_key="FOUNDRY_MISTRAL_KEY",
         model_name="mistral-small-2503"
     ),
+    "claude": ModelConfig(
+        provider="anthropic",
+        endpoint="https://comp0016-team28-promptinjectionprotection.services.ai.azure.com/anthropic/v1/messages",
+        api_key="FOUNDRY_CLAUDESONNET45_KEY",
+        model_name="claude-sonnet-4-5"
+    ),
 }
