@@ -3,7 +3,9 @@ from domain.providers.base_provider import ModelProvider
 from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
 from .openai_compatible_provider import OpenAICompatibleProvider
+from infra.config.models import MODEL_REGISTRY, ModelConfig
 
+__all__ = ["MODEL_REGISTRY", "ModelConfig"]
 
 _PROVIDER_REGISTRY = {
     "openai": OpenAIProvider,
