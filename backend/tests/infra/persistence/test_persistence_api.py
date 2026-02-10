@@ -140,8 +140,8 @@ async def test_runs_create_and_list(app):
                 "suiteId": suite_id,
                 "name": "Run Test",
                 "prompt": "hello",
-                "modelConfig": {"modelId": "gpt-5.2"},
-                "requiredMitigations": ["input-validation"],
+                "model_cfg": {"modelId": "gpt-5.2"},
+                "mitigations": ["input-validation"],
             },
         )
         test_id = r.json()["id"]

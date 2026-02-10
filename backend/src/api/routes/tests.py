@@ -34,9 +34,8 @@ def create_test(payload: TestCreate, session: Session = Depends(get_db_session))
         suite_id=payload.suiteId,
         name=payload.name,
         prompt=payload.prompt,
-        expected_behavior=payload.expectedBehavior,
-        required_mitigations=list(payload.requiredMitigations),
-        model_cfg=dict(payload.modelConfig),
+        mitigations=list(payload.mitigations),
+        model_cfg=dict(payload.model_cfg),
         created_at=now,
         updated_at=now,
     )

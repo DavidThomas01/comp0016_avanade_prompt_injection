@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/runs", tags=["runs"])
 
 
 def _resolve_model_id(test: Test) -> str:
-    # Prefer modelConfig.modelId, fallback to modelConfig.model
+    # Prefer model_cfg.modelId, fallback to model_cfg.model
     cfg = test.model_cfg or {}
     return str(cfg.get("modelId") or cfg.get("model") or "gpt-5.2")
 
@@ -41,7 +41,7 @@ async def create_run(
         raise HTTPException(status_code=404, detail="Test not found")
 
     prompt_used = payload.promptOverride if payload.promptOverride is not None else test.prompt
-    mitigations_used = payload.mitigationsOverride if payload.mitigationsOverride is not None else list(test.required_mitigations)
+    mitigations_used = payload.mitigationsOverride if payload.mitigationsOverride is not None else list(test.mitigations)
 
     model_id = _resolve_model_id(test)
 

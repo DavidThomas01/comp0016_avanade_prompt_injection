@@ -32,12 +32,11 @@ type Test = {
   id: string;
   suiteId: string;
   name: string;
-  prompt?: string;
-  expectedBehavior?: string;
-  requiredMitigations: string[];
-  modelConfig?: ModelConfig;
-  createdAt?: string;
-  updatedAt?: string;
+  prompt: string;
+  mitigations: string[];
+  model_cfg: ModelConfig;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type Run = {
@@ -150,7 +149,7 @@ export function TestingPage() {
   }, [tests]);
 
   const selectedMitigationSet = useMemo(() => {
-    return new Set(selectedTest?.requiredMitigations ?? []);
+    return new Set(selectedTest?.mitigations ?? []);
   }, [selectedTest]);
 
   /* ---------------- Create Suite Modal ---------------- */
@@ -218,7 +217,7 @@ export function TestingPage() {
   const createTestFromModal = async () => {
     if (!canCreateTest || !targetSuiteId) return;
 
-    const modelConfig: ModelConfig =
+    const model_cfg: ModelConfig =
       addTestTab === 'existing'
         ? { mode: 'existing', provider: 'openai', modelId: newTestModelId }
         : { mode: 'custom', provider: 'custom', apiKey: newTestApiKey.trim() };
@@ -226,8 +225,8 @@ export function TestingPage() {
     const created = await apiPost<Test>('/tests', {
       suiteId: targetSuiteId,
       name: newTestTitle.trim(),
-      requiredMitigations: newTestMitigations, // can be []
-      modelConfig,
+      mitigations: newTestMitigations, // can be []
+      model_cfg,
     });
 
     setTests(prev => [...prev, created]);
@@ -249,8 +248,7 @@ export function TestingPage() {
       const run = await apiPost<Run>('/runs', {
         testId: selectedTest.id,
         promptOverride: promptOverride.trim().length > 0 ? promptOverride.trim() : undefined,
-        activeMitigations: selectedTest.requiredMitigations ?? [],
-        modelConfigOverride: null,
+        mitigationsOverride: selectedTest.mitigations ?? [],
       });
 
       setRunResult(run);
@@ -281,9 +279,9 @@ export function TestingPage() {
         suiteId: selectedTest.suiteId,
         name: selectedTest.name,
         prompt,
-        requiredMitigations: selectedTest.requiredMitigations ?? [],
-        modelConfig:
-          selectedTest.modelConfig ?? { mode: 'existing', provider: 'openai', modelId: 'gpt-5' },
+        mitigations: selectedTest.mitigations ?? [],
+        model_cfg:
+          selectedTest.model_cfg ?? { mode: 'existing', provider: 'openai', modelId: 'gpt-5' },
       });
 
       setTests(prev => [...prev, created]);
@@ -521,7 +519,7 @@ export function TestingPage() {
                               <div className="min-w-0">
                                 <div className="font-medium text-sm truncate">{test.name}</div>
                                 <div className="text-xs text-gray-500 mt-0.5">
-                                  {test.requiredMitigations?.length ?? 0} active mitigations
+                                  {test.mitigations?.length ?? 0} active mitigations
                                 </div>
                               </div>
 
@@ -593,7 +591,7 @@ export function TestingPage() {
               <div className="bg-gray-100 rounded p-4">
                 <div className="text-xs text-gray-500 mb-2">Active Mitigations</div>
                 <div className="text-2xl font-bold text-orange-500">
-                  {(selectedTest?.requiredMitigations?.length ?? 0)} / {mitigations.length}
+                  {(selectedTest?.mitigations?.length ?? 0)} / {mitigations.length}
                 </div>
               </div>
             </div>
@@ -605,8 +603,8 @@ export function TestingPage() {
               <h2 className="font-semibold">{selectedTest?.name ?? 'Select a test'}</h2>
               <div className="text-xs text-gray-500 mt-1">
                 Model:{' '}
-                {selectedTest?.modelConfig?.mode === 'existing'
-                  ? selectedTest.modelConfig.modelId
+                {selectedTest?.model_cfg?.mode === 'existing'
+                  ? selectedTest.model_cfg.modelId
                   : 'custom'}
               </div>
             </div>

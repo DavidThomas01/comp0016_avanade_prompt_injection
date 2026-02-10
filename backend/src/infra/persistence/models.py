@@ -36,11 +36,10 @@ class Test(SQLModel, table=True):
     name: str
 
     prompt: str = ""
-    expected_behavior: str = ""
 
-    required_mitigations: list[str] = Field(
+    mitigations: list[str] = Field(
         default_factory=list,
-        sa_column=Column(JSON),
+        sa_column=Column("mitigations", JSON),
     )
 
     # Pydantic v2 reserves `model_config`, so we expose `model_cfg` in Python,
