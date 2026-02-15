@@ -17,8 +17,9 @@ class Test:
     model: ModelSpec
     environment: Optional[EnvironmentSpec]
     runner: RunnerSpec
+    system_prompt: Optional[str]
     created_at: datetime
-    parent_id: Optional[str] = None  # for versioning
+    parent_id: Optional[str] = None
 
     @staticmethod
     def create(
