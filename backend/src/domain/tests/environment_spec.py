@@ -12,12 +12,12 @@ class EnvironmentSpec:
     def validate(self) -> None:
         if self.type == "mitigation":
             if not self.mitigations:
-                raise ValueError("mitigation env requires mitigations list")
+                raise ValueError("mitigation setup requires a mitigations list")
             if self.system_prompt:
-                raise ValueError("mitigation env cannot include custom system_prompt")
+                raise ValueError("mitigation setup cannot include custom system prompt")
 
         if self.type == "custom":
             if not self.system_prompt:
-                raise ValueError("custom env requires custom system_prompt")
+                raise ValueError("custom setup requires custom system prompt")
             if self.mitigations:
-                raise ValueError("custom env cannot include mitigations")
+                raise ValueError("custom setup cannot include mitigations")
