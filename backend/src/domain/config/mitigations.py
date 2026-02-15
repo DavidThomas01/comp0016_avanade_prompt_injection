@@ -10,7 +10,7 @@ class MitigationConfig:
     implementation: str | None
 
 
-MITIGATIONS = {
+MITIGATION_REGISTRY = {
     "delimiter_tokens": MitigationConfig(
         id="delimiter_tokens",
         name="Delimiter Tokens",
