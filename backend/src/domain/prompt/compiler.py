@@ -4,16 +4,21 @@ class PromptCompiler:
 
     @staticmethod
     def compile(mitigations, system_prompt) -> str:
-
-        system_prompt.append("For security, you must follow these instructions:")
         
-        for mitigation in mitigations:
-            mitigation_config = MITIGATION_REGISTRY.get(mitigation)
+        if mitigations:
             
-            if not mitigation_config:
-                raise ValueError("mitigation is not defined in the platform")
+            if system_prompt == None:
+                system_prompt = ""
+
+            system_prompt.append("For security, you must follow these instructions:")
             
-            if mitigation_config.layer == "prompt":
-                system_prompt.append("\n" + mitigation_config.prompt_message)
+            for mitigation in mitigations:
+                mitigation_config = MITIGATION_REGISTRY.get(mitigation)
+                
+                if not mitigation_config:
+                    raise ValueError("mitigation is not defined in the platform")
+                
+                if mitigation_config.layer == "prompt":
+                    system_prompt.append("\n" + mitigation_config.prompt_message)
 
         return system_prompt
