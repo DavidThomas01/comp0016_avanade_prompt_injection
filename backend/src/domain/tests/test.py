@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 import uuid
 
-from .model_spec import ModelSpec
+from .model_spec import ModelSpec, ModelType
 from .environment_spec import EnvironmentSpec
 from .runner_spec import RunnerSpec
 
@@ -17,7 +17,6 @@ class Test:
     model: ModelSpec
     environment: Optional[EnvironmentSpec]
     runner: RunnerSpec
-    system_prompt: Optional[str]
     created_at: datetime
     parent_id: Optional[str] = None
 
@@ -78,7 +77,7 @@ class Test:
         model.validate()
         runner.validate()
 
-        if model.type == "external":
+        if model.type == ModelType.EXTERNAL:
             if environment is not None:
                 raise ValueError("external model cannot include environment")
             return
