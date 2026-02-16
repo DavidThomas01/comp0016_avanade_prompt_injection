@@ -1,20 +1,38 @@
 from dataclasses import dataclass
-from typing import Literal, Optional, List
+from enum import Enum
+from typing import Optional, List
 from domain.providers.base_provider import Message
 
-RunnerType = Literal["single", "framework"]
+class RunnerType(str, Enum):
+    PROMPT = "prompt"
+    FRAMEWORK = "framework"
 
 @dataclass(frozen=True)
 class RunnerSpec:
     type: RunnerType
 
-    # Only used for single prompt runs
     context: Optional[List[Message]] = None
+    
+    
+    @classmethod
+    def create_default(cls, runner_type):
+        return cls(
+            type=runner_type
+        )
+    
+    
+    @classmethod
+    def create_prompt(cls, context):
+        return cls(
+            type=RunnerType.PROMPT,
+            context=context
+        )
+        
 
     def validate(self) -> None:
-        if self.type == "single":
+        if self.type == RunnerType.PROMPT:
             return
 
-        if self.type == "framework":
+        if self.type == RunnerType.FRAMEWORK:
             if self.context:
                 raise ValueError("framework runner cannot include context")
