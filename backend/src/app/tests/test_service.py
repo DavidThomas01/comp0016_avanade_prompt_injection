@@ -6,11 +6,15 @@ from domain.config.mitigations import MITIGATION_REGISTRY
 class TestService():
     
     def create(self, payload: dict) -> Test:
+        
+        self._require(payload, "model", "runner")
+        
         model_spec = self._build_model(payload["model"])
         environment_spec = None
         runner_spec = self._build_runner(payload["runner"])
         
         if model_spec.type == ModelType.PLATFORM:
+            self._require(payload, "environment")
             environment_spec = self._build_environment(payload.get("environment"))
             
         return Test.create(
@@ -20,6 +24,27 @@ class TestService():
             runner_spec=runner_spec,
         )
             
+            
+    def derive(self, parent: Test, payload: dict) -> Test:
+        if "model" in payload:
+            model_spec = self._build_model(payload["model"])
+            if model_spec.type == ModelType.PLATFORM:
+                if "environment" in payload:
+                    environment_spec = self._build_environment(payload["environment"])
+                else:
+                    environment_spec = parent.environment
+            else:
+                environment_spec = None
+        else:
+            model_spec = parent.model
+            environment_spec = parent.environment
+        runner_spec = self._build_runner(payload["runner"]) if "runner" in payload else parent.runner
+        return parent.derive(
+            model=model_spec,
+            environment=environment_spec,
+            runner=runner_spec
+        )
+        
     
     def _build_model(self, model_payload) -> ModelSpec:
         if isinstance(model_payload, str):
@@ -82,11 +107,11 @@ class TestService():
         raise ValueError("environment must include only one of system prompt mitigations")
             
     
-    def _build_environment_with_custom_prompt(self, system_prompt: str):
+    def _build_environment_with_custom_prompt(self, system_prompt: str) -> EnvironmentSpec:
         return EnvironmentSpec.create_from_prompt(system_prompt)
         
         
-    def _build_environment_with_mitigations(self, mitigations: list):
+    def _build_environment_with_mitigations(self, mitigations: list) -> EnvironmentSpec:
         self._validate_mitigations(mitigations)
         system_prompt = self._build_prompt_from_mitigations(mitigations)
         return EnvironmentSpec.create_from_mitigations(mitigations, system_prompt)
@@ -99,3 +124,9 @@ class TestService():
     
     def _build_prompt_from_mitigations(self, mitigations) -> str:
         return PromptCompiler.compile(mitigations, None)
+    
+    
+    def _require(self, payload: dict, *required_fields):
+        missing = [f for f in required_fields if f not in payload]
+        if missing:
+            raise ValueError(f"missing required fields: {missing}")
