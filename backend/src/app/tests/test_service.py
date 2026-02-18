@@ -25,21 +25,17 @@ class TestService():
         )
             
             
-    def derive(self, parent: Test, payload: dict) -> Test:
-        if "model" in payload:
-            model_spec = self._build_model(payload["model"])
-            if model_spec.type == ModelType.PLATFORM:
-                if "environment" in payload:
-                    environment_spec = self._build_environment(payload["environment"])
-                else:
-                    environment_spec = parent.environment
+    def update(self, parent: Test, payload: dict) -> Test:
+        model_spec = self._build_modeL(payload["model"]) if "model" in payload else parent.model
+        if model_spec.type == ModelType.PLATFORM:
+            if "environment" in payload:
+                environment_spec = self._build_environment(payload["environment"])
             else:
-                environment_spec = None
+                environment_spec = parent.environment
         else:
-            model_spec = parent.model
-            environment_spec = parent.environment
+            environment_spec = None
         runner_spec = self._build_runner(payload["runner"]) if "runner" in payload else parent.runner
-        return parent.derive(
+        return parent.update(
             model=model_spec,
             environment=environment_spec,
             runner=runner_spec
