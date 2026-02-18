@@ -10,7 +10,7 @@ from .runner_spec import RunnerSpec
 def new_test_id() -> str:
     return f"test_{uuid.uuid4().hex[:10]}"
 
-@dataclass(frozen=True)
+@dataclass
 class Test:
     id: str
     name: str
