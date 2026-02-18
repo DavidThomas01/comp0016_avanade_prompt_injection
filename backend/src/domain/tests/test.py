@@ -18,7 +18,6 @@ class Test:
     environment: Optional[EnvironmentSpec]
     runner: RunnerSpec
     created_at: datetime
-    parent_id: Optional[str] = None
 
     @staticmethod
     def create(
@@ -36,10 +35,9 @@ class Test:
             environment=environment,
             runner=runner,
             created_at=datetime.utcnow(),
-            parent_id=None,
         )
 
-    def derive(
+    def update(
         self,
         *,
         name: Optional[str] = None,
@@ -58,13 +56,12 @@ class Test:
         Test._validate(model=new_model, environment=new_env, runner=new_runner)
 
         return Test(
-            id=new_test_id(),
+            id=self.id,
             name=name or self.name,
             model=new_model,
             environment=new_env,
             runner=new_runner,
             created_at=datetime.utcnow(),
-            parent_id=self.id,
         )
 
     @staticmethod
