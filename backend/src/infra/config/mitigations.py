@@ -6,31 +6,24 @@ from typing import Dict
 # Static mitigation templates (versioned, reviewed, immutable)
 MITIGATION_REGISTRY: Dict[str, str] = {
     "input-validation": (
-        "Input Validation: Implement multi-layer input validation with pattern detection "
-        "and semantic analysis to detect and reject malicious inputs before processing."
+        "Input Validation"
     ),
     "pattern-matching": (
-        "Pattern Matching: Use signature-based detection of known attack patterns and "
-        "malicious input sequences to identify attempted prompt injections."
+        "Pattern Matching"
     ),
     "blocklist-filtering": (
-        "Blocklist Filtering: Filter requests based on a comprehensive blocklist of known "
-        "malicious phrases and keywords before processing user inputs."
+        "Blocklist Filtering"
     ),
     "delimiter-tokens": (
-        "Delimiter Tokens: Use special tokens to clearly separate trusted system instructions "
-        "from untrusted user input, preventing confusion between the two."
+        "Delimiter Tokens"
     ),
     "output-sanitization": (
-        "Output Sanitization: Apply multi-layered sanitization to model outputs to prevent "
-        "data leakage and remove sensitive information before returning to users."
+        "Output Sanitization"
     ),
     "rate-limiting": (
-        "Rate Limiting: Implement rate limiting to prevent automated attack attempts and "
-        "restrict the frequency of requests from individual users or IPs."
+        "Rate Limiting"
     ),
     "anomaly-detection": (
-        "Anomaly Detection: Use machine learning to identify anomalous patterns and unusual "
-        "behaviors in user interactions that may indicate attack attempts."
+        "Anomaly Detection"
     ),
 }

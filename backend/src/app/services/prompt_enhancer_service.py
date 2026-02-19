@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
+from domain.providers.base_provider import Message, ModelRequest
 from app.provider_router import ProviderRouter
 from infra.config.mitigations import MITIGATION_REGISTRY
 
@@ -12,6 +13,49 @@ logger = logging.getLogger(__name__)
 class EnhancementValidationError(Exception):
     """Raised when prompt enhancement fails validation after all retries."""
     pass
+
+
+async def improve_prompt_structure(
+    original_prompt: str,
+    provider_router: ProviderRouter,
+) -> str:
+    """
+    Stage 1: Rewrite user's prompt to be better structured for AI consumption.
+    
+    Args:
+        original_prompt: User's base system prompt
+        provider_router: ProviderRouter to call the LLM
+        
+    Returns:
+        Improved/restructured prompt
+    """
+    improvement_system_message = (
+        "You are a prompt engineering expert. Rewrite the following system prompt to be "
+        "clearer, better structured, and optimized for AI assistants while preserving its "
+        "exact intent and functionality.\n\n"
+        "Guidelines:\n"
+        "- Maintain all original requirements and constraints\n"
+        "- Improve structure (sections, bullet points, clear instructions)\n"
+        "- Rephrase for clarity without changing meaning\n"
+        "- Keep the same tone and level of formality\n"
+        "- Do not add or remove functionality\n\n"
+        "Output only the improved prompt, nothing else."
+    )
+    
+    request = ModelRequest(
+        model="gpt-5-nano",
+        messages=[Message(role="system", content=improvement_system_message),
+                  Message(role="user", content=original_prompt)],
+        temperature=0.3,  # Allow some creative restructuring
+    )
+    
+    response = await provider_router.generate(request)
+    improved = response.text.strip()
+    
+    if not improved:
+        raise ValueError("Stage 1 (improvement) produced empty response")
+    
+    return improved
 
 
 def prepend_mitigations(
@@ -41,6 +85,7 @@ def prepend_mitigations(
     enhanced = mitigation_block + improved_prompt
     
     return enhanced
+
 
 async def enhance_prompt_with_validation(
     original_prompt: str,
