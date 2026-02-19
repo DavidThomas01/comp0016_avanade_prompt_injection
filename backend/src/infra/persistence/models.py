@@ -78,3 +78,28 @@ class Run(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow, index=True)
 
     test: Optional["Test"] = Relationship(back_populates="runs")
+
+
+class PromptEnhancement(SQLModel, table=True):
+    __tablename__ = "prompt_enhancements"
+
+    id: str = Field(default_factory=lambda: f"enh-{uuid4()}", primary_key=True)
+
+    original_prompt: str = ""
+    improved_prompt: str = ""
+    enhanced_prompt: str = ""
+
+    selected_mitigation_ids: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSON),
+    )
+
+    verification_data: Dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+    )
+
+    model_id: str = "gpt-5-nano"
+    attempts: int = 1
+
+    created_at: datetime = Field(default_factory=_utcnow, index=True)
