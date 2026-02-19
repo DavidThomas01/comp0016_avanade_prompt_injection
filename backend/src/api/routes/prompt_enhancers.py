@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session
 
-from api.deps import get_provider_router
+from api.deps import get_db_session, get_provider_router
 from api.schemas.prompt_enhancers import PromptEnhancementCreate, PromptEnhancementOut
 from infra.persistence.models import PromptEnhancement
 from app.provider_router import ProviderRouter
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/api/prompt-enhancements", tags=["prompt_enhancements
 @router.post("", response_model=PromptEnhancementOut, status_code=201)
 async def enhance_prompt(
     payload: PromptEnhancementCreate,
+    session: Session = Depends(get_db_session),
     router_dep: ProviderRouter = Depends(get_provider_router),
 ) -> PromptEnhancementOut:
     """
@@ -56,7 +58,7 @@ async def enhance_prompt(
             detail=f"Enhancement failed: {str(e)}",
         )
     
-
+    # Save to database
     now = datetime.now(timezone.utc)
     enhancement = PromptEnhancement(
         original_prompt=result["original_prompt"],
@@ -68,5 +70,8 @@ async def enhance_prompt(
         attempts=result["attempts"],
         created_at=now,
     )
+    session.add(enhancement)
+    session.commit()
+    session.refresh(enhancement)
     
     return PromptEnhancementOut.model_validate(enhancement).model_dump(by_alias=True)  # type: ignore[return-value]
