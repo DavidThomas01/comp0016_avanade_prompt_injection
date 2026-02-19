@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from domain.providers.base_provider import Message, ModelRequest
+from domain.providers.base_provider import Message, ModelRequest, ModelResponse
 from app.provider_router import ProviderRouter
 from infra.config.mitigations import MITIGATION_REGISTRY
 
@@ -85,6 +86,79 @@ def prepend_mitigations(
     enhanced = mitigation_block + improved_prompt
     
     return enhanced
+
+
+async def verify_enhancement(
+    original_prompt: str,
+    improved_prompt: str,
+    enhanced_prompt: str,
+    mitigation_ids: List[str],
+    provider_router: ProviderRouter,
+) -> Dict[str, Any]:
+    """
+    Stage 3: Verify the enhancement is valid and meets criteria.
+    
+    Args:
+        original_prompt: Original user prompt
+        improved_prompt: Restructured prompt
+        enhanced_prompt: Final prompt with mitigations
+        mitigation_ids: Expected mitigation IDs
+        provider_router: ProviderRouter to call the LLM
+        
+    Returns:
+        Verification result dictionary with verdict and details
+    """
+    mitigation_list = "\n".join(
+        f"- {MITIGATION_REGISTRY[mid]}"
+        for mid in mitigation_ids
+        if mid in MITIGATION_REGISTRY
+    )
+    
+    verification_system_message = (
+        "You are a security verification system. Analyze whether a prompt enhancement "
+        "process was successful. Respond ONLY with valid JSON."
+    )
+    
+    verification_user_message = f"""ORIGINAL PROMPT:
+{original_prompt}
+
+IMPROVED PROMPT (after restructuring):
+{improved_prompt}
+
+FINAL ENHANCED PROMPT (with mitigations):
+{enhanced_prompt}
+
+REQUIRED MITIGATIONS:
+{mitigation_list}
+
+Verify:
+1. Does the improved prompt preserve the exact intent and functionality of the original?
+2. Are all required mitigations present in the final prompt?
+3. Were any unintended changes or additions made?
+4. Is the final prompt coherent and properly structured?
+
+Respond with JSON ONLY (no markdown, no extra text):
+{{"intent_preserved": boolean, "all_mitigations_present": boolean, "unintended_changes": boolean, "coherent": boolean, "missing_mitigations": [string list], "issues": [string list], "verdict": "PASS" | "FAIL", "explanation": "brief explanation"}}"""
+    
+    request = ModelRequest(
+        model="gpt-5-nano",
+        messages=[
+            Message(role="system", content=verification_system_message),
+            Message(role="user", content=verification_user_message)
+        ],
+        temperature=0.0,  # Deterministic verification
+    )
+    
+    response = await provider_router.generate(request)
+    
+    # Parse JSON response
+    try:
+        result = json.loads(response.text)
+    except json.JSONDecodeError:
+        logger.error(f"Failed to parse verification JSON: {response.text}")
+        raise ValueError("Verification response was not valid JSON")
+    
+    return result
 
 
 async def enhance_prompt_with_validation(
