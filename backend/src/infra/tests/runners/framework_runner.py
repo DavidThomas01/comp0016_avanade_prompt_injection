@@ -1,8 +1,9 @@
 from infra.tests.runners.pyrit_runner import PyritRunner
 from infra.tests.runners.garak_runner import GarakRunner
+from domain.tests import TestRunner
 
 
-class FrameworkRunner:
+class FrameworkRunner(TestRunner):
 
     def run(self, test):
 
