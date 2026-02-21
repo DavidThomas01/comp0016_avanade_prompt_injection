@@ -5,6 +5,7 @@ from datetime import datetime
 @dataclass
 class TestResult:
     output: Any
+    analysis: Any
     started_at: datetime
     finished_at: datetime
     
