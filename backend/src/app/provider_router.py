@@ -1,4 +1,4 @@
-from domain.providers.base_provider import ModelRequest, ModelResponse, ModelProvider
+from domain.providers import ModelRequest, ModelResponse, ModelProvider
 from infra.config.models import MODEL_REGISTRY
 from infra.providers.registry import get_provider
 
