@@ -1,12 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
-
-
-@dataclass
-class Message:
-    role: str  # "system" | "user" | "assistant"
-    content: str
+from .message import Message
+from .model_response import ModelResponse
 
 
 @dataclass
@@ -15,13 +11,6 @@ class ModelRequest:
     messages: List[Message]
     system_prompt: Optional[str] = None
     temperature: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ModelResponse:
-    text: str
-    raw: Optional[Any] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
