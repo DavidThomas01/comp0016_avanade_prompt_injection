@@ -15,9 +15,9 @@ class MitigationLayer(Enum):
     
 @dataclass
 class MitigationAnalysis:
-    flagged=bool
-    score=float
-    reason=str
+    flagged: bool
+    score: float
+    reason: str
 
 
 @dataclass
