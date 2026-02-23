@@ -26,7 +26,7 @@ class MitigationContext:
     context: list[Message]
     metadata: dict[str, Any] = field(default_factory=dict)
     raw: Optional[Any] = None
-    analysis: MitigationAnalysis | None
+    analysis: Optional[MitigationAnalysis] = None
 
 
 class Mitigation(ABC):
