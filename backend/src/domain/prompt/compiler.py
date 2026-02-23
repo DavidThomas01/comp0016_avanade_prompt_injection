@@ -1,4 +1,4 @@
-from domain.config.mitigations import MITIGATION_REGISTRY
+from infra.config.mitigations import MITIGATION_REGISTRY
 
 class PromptCompiler:
 
