@@ -7,5 +7,5 @@ from domain.providers import Message
 class TestRunner(ABC):
     
     @abstractmethod
-    def run(self, test: Test, prompt: Optional[Message]) -> TestResult:
+    async def run(self, test: Test, prompt: Optional[Message]) -> TestResult:
         pass
