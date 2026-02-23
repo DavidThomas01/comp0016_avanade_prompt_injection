@@ -13,23 +13,24 @@ class PromptRunner(TestRunner):
     def __init__(self):
         self.analyser = PromptTestAnalyser()
     
-    def run(self, test: Test, prompt: Optional[Message]) -> TestResult:
+    async def run(self, test: Test, prompt: Optional[Message]) -> TestResult:
         
         if not prompt:
             raise ValueError("custom prompt run requires a prompt")
         
         started_at = datetime.now()
+        mitigation_analysis = None
         
         if test.model.type == ModelType.PLATFORM:
-            model_response, mitigation_analysis = self._run_test_on_platform_model(test, prompt)
+            model_response, mitigation_analysis = await self._run_test_on_platform_model(test, prompt)
         
             
         elif test.model.type == ModelType.EXTERNAL:
-            model_response = self._run_test_on_external_model(test, prompt)
+            model_response = await self._run_test_on_external_model(test, prompt)
             
         finished_at = datetime.now()
             
-        analysis = self.analyser.analyse(model_response, prompt, test.runner.context, mitigation_analysis if mitigation_analysis else None)
+        analysis = await self.analyser.analyse(model_response, prompt, test.runner.context, mitigation_analysis)
         
         return TestResult(
             output = model_response,
@@ -39,9 +40,9 @@ class PromptRunner(TestRunner):
         )
     
     
-    def _run_test_on_platform_model(self, test: Test, prompt: Optional[Message]) -> tuple[Message, List[MitigationAnalysis]]:
+    async def _run_test_on_platform_model(self, test: Test, prompt: Optional[Message]) -> tuple[Message, List[MitigationAnalysis]]:
         prompt = self._run_pre_input_mitigations(test.environment.mitigations, prompt, test.runner.context)
-        response = self._call_test_prompt_on_platform_model(test, prompt)
+        response = await self._call_test_prompt_on_platform_model(test, prompt)
         mitigated_response = self._run_post_output_mitigations(test.environment.mitigations, response, test.runner.context + [prompt])
         mitigation_analysis = self._run_monitoring_mitigations(test.environment.mitigations, mitigated_response, test.runner.context + [prompt])
         return mitigated_response, mitigation_analysis
@@ -62,7 +63,7 @@ class PromptRunner(TestRunner):
         return mitigation_context.message
 
 
-    def _call_test_prompt_on_platform_model(self, test: Test, prompt: Message) -> ModelResponse:
+    async def _call_test_prompt_on_platform_model(self, test: Test, prompt: Message) -> ModelResponse:
         provider = ProviderRouter()
         
         request = ModelRequest(
@@ -71,7 +72,7 @@ class PromptRunner(TestRunner):
             system_prompt = test.environment.system_prompt,
         )
         
-        return provider.generate(request)
+        return await provider.generate(request)
         
         
     def _run_post_output_mitigations(self, mitigations, response, context):
@@ -107,20 +108,20 @@ class PromptRunner(TestRunner):
         return mitigation_analysis
             
             
-    def _get_layer_mitigations(self, layer, mitigations):
+    def _get_mitigations_for_layer(self, layer, mitigations):
         return [mitigation for mitigation in mitigations if self._is_layer_mitigation(layer, mitigation)]
     
     
-    def _is_pre_input_mitigation(self, layer, mitigation):
+    def _is_layer_mitigation(self, layer, mitigation):
         return MITIGATION_REGISTRY.get(mitigation).layer == layer
         
         
-    def _run_test_on_external_model(self, test: Test, prompt: Optional[Message]) -> ModelResponse:
+    async def _run_test_on_external_model(self, test: Test, prompt: Optional[Message]) -> ModelResponse:
         provider = ExternalModelProvider()
         request = ExternalModelRequest(
             endpoint=test.model.endpoint,
             key=test.model.key,
             messages=(test.runner.context + [prompt])
         )
-        return provider.generate(request)
+        return await provider.generate(request)
             
