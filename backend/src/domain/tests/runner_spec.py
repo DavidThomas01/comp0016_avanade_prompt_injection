@@ -7,7 +7,7 @@ class RunnerType(str, Enum):
     PROMPT = "prompt"
     FRAMEWORK = "framework"
 
-@dataclass(frozen=True)
+@dataclass
 class RunnerSpec:
     type: RunnerType
 
@@ -16,6 +16,8 @@ class RunnerSpec:
     
     @classmethod
     def create_default(cls, runner_type):
+        if runner_type == RunnerType.PROMPT:
+            return cls(type=runner_type, context=[])
         return cls(
             type=runner_type
         )
@@ -25,7 +27,7 @@ class RunnerSpec:
     def create_prompt(cls, context):
         return cls(
             type=RunnerType.PROMPT,
-            context=context
+            context=context if context is not None else []
         )
         
 

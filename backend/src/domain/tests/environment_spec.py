@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional
 
@@ -11,8 +11,8 @@ class EnvType(Enum):
 @dataclass(frozen=True)
 class EnvironmentSpec:
     type: EnvType
-    mitigations: Optional[List[str]] = None
     system_prompt: str
+    mitigations: Optional[List[str]] = field(default_factory=list)
     
     
     @classmethod
