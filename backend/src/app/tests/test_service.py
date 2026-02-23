@@ -1,7 +1,8 @@
 from domain.prompt.compiler import PromptCompiler
 from domain.tests import *
 from infra.config.models import MODEL_REGISTRY
-from domain.config.mitigations import MITIGATION_REGISTRY
+from infra.config.mitigations import MITIGATION_REGISTRY
+from infra.tests.runners import *
 
 class TestService():
     
@@ -19,14 +20,14 @@ class TestService():
             
         return Test.create(
             name=payload["name"],
-            model_spec=model_spec,
-            environment_spec=environment_spec,
-            runner_spec=runner_spec,
+            model=model_spec,
+            environment=environment_spec,
+            runner=runner_spec,
         )
             
             
     def update(self, parent: Test, payload: dict) -> Test:
-        model_spec = self._build_modeL(payload["model"]) if "model" in payload else parent.model
+        model_spec = self._build_model(payload["model"]) if "model" in payload else parent.model
         if model_spec.type == ModelType.PLATFORM:
             if "environment" in payload:
                 environment_spec = self._build_environment(payload["environment"])
@@ -50,13 +51,13 @@ class TestService():
         raise ValueError(f"model payload structure must be string or object")
     
     
-    def _build_platform_model(model: str) -> ModelSpec:
+    def _build_platform_model(self, model: str) -> ModelSpec:
         if model not in MODEL_REGISTRY:
             raise ValueError(f"unknown platform model: {model}")
         return ModelSpec.create_from_registry(model)
     
     
-    def _build_external_model(model_config: dict) -> ModelSpec:
+    def _build_external_model(self, model_config: dict) -> ModelSpec:
         required_fields = ["endpoint", "key"]
         missing = [f for f in required_fields if f not in model_config]
         if missing:
@@ -97,9 +98,9 @@ class TestService():
         system_prompt = env_payload.get("system_prompt")
         mitigations = env_payload.get("mitigations")
         if system_prompt and not mitigations:
-            self._build_environment_with_custom_prompt(system_prompt)
+            return self._build_environment_with_custom_prompt(system_prompt)
         if mitigations and not system_prompt:
-            self._build_environment_with_mitigations(mitigations)
+            return self._build_environment_with_mitigations(mitigations)
         raise ValueError("environment must include only one of system prompt mitigations")
             
     
@@ -111,6 +112,7 @@ class TestService():
         self._validate_mitigations(mitigations)
         system_prompt = self._build_prompt_from_mitigations(mitigations)
         return EnvironmentSpec.create_from_mitigations(mitigations, system_prompt)
+        
         
     def _validate_mitigations(mitigations):
         invalid_mitigations = [mitigation for mitigation in mitigations if mitigation not in MITIGATION_REGISTRY]
@@ -126,3 +128,25 @@ class TestService():
         missing = [f for f in required_fields if f not in payload]
         if missing:
             raise ValueError(f"missing required fields: {missing}")
+        
+    
+    async def run(self, test: Test, prompt=None) -> TestResult:
+        
+        runner = self._resolve_runner(test)
+        
+        result = await runner.run(test, prompt if prompt else None)
+        
+        test.runner.context.extend([prompt, result.output])
+        
+        return result 
+        
+        
+    def _resolve_runner(self, test: Test) -> TestRunner:
+        
+        if test.runner.type == RunnerType.PROMPT:
+            return PromptRunner()
+        
+        elif test.runner.type == RunnerType.FRAMEWORK:
+            return FrameworkRunner()
+        
+        raise ValueError("test runner is undefined")
