@@ -1,12 +1,15 @@
 import uuid
 from pathlib import Path
+from typing import Optional
+from domain.tests import TestRunner, Test, TestResult
+from domain.providers import Message
 
 
-class GarakRunner:
+class GarakRunner(TestRunner):
 
     BASE_OUTPUT = Path("./garak_runs")
 
-    def run(self, model, test):
+    async def run(self, test: Test, prompt: Optional[Message]) -> TestResult:
 
         try:
             from garak import harness, config
@@ -19,27 +22,29 @@ class GarakRunner:
         run_dir = self.BASE_OUTPUT / f"{test.id}_{run_id}"
         run_dir.mkdir(parents=True, exist_ok=True)
 
-        # --- configure garak ---
-        config.system.model_type = model.spec.type
-        config.system.model_name = model.spec.name
+        config.system.model_type = test.model.type
+        config.system.model_name = test.model.model_id
         config.system.output_dir = str(run_dir)
 
-        # runner probes come from RunnerSpec
         if hasattr(test.runner, "probes"):
             config.system.probes = test.runner.probes
 
         config.system.generations = 1
 
-        # --- execute ---
         harness.run()
 
-        # --- read result ---
         report = self._latest_json(run_dir)
-
-        return {
-            "framework": "garak",
-            "report_path": str(report),
-        }
+        
+        from datetime import datetime
+        return TestResult(
+            output={
+                "framework": "garak",
+                "report_path": str(report),
+            },
+            analysis=None,
+            started_at=datetime.now(),
+            finished_at=datetime.now()
+        )
 
     def _latest_json(self, directory: Path) -> Path:
         files = list(directory.glob("*.json"))

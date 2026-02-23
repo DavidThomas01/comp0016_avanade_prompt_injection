@@ -1,19 +1,27 @@
+from typing import Optional
 from infra.tests.runners.pyrit_runner import PyritRunner
 from infra.tests.runners.garak_runner import GarakRunner
-from domain.tests import TestRunner
+from domain.tests import TestRunner, Test, TestResult
+from domain.providers import Message
+from datetime import datetime
 
 
 class FrameworkRunner(TestRunner):
 
-    def run(self, test):
+    async def run(self, test: Test, prompt: Optional[Message]) -> TestResult:
 
         pyrit = PyritRunner()
         garak = GarakRunner()
 
-        pyrit_results = pyrit.run(test)
-        garak_results = garak.run(test)
+        pyrit_results = await pyrit.run(test, prompt)
+        garak_results = await garak.run(test, prompt)
 
-        return {
-            "pyrit": pyrit_results,
-            "garak": garak_results,
-        }
+        return TestResult(
+            output={
+                "pyrit": pyrit_results,
+                "garak": garak_results,
+            },
+            analysis=None,
+            started_at=datetime.now(),
+            finished_at=datetime.now()
+        )
