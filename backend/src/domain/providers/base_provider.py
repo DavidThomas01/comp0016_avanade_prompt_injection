@@ -10,7 +10,6 @@ class ModelRequest:
     model: str
     messages: List[Message]
     system_prompt: Optional[str] = None
-    temperature: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

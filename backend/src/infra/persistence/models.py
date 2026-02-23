@@ -77,3 +77,54 @@ class Run(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow, index=True)
 
     test: Optional["Test"] = Relationship(back_populates="runs")
+
+
+class DomainTest(SQLModel, table=True):
+    """Persistence model for domain.tests.Test objects"""
+    __tablename__ = "domain_tests"
+
+    id: str = Field(default_factory=lambda: f"test-{uuid4()}", primary_key=True)
+    name: str
+
+    # Model spec stored as JSON
+    model_spec: Dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column("model_spec", JSON),
+    )
+
+    # Environment spec stored as JSON
+    environment_spec: Optional[Dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column("environment_spec", JSON),
+    )
+
+    # Runner spec stored as JSON
+    runner_spec: Dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column("runner_spec", JSON),
+    )
+
+    created_at: datetime = Field(default_factory=_utcnow, index=True)
+
+    test_results: list["DomainTestResult"] = Relationship(
+        back_populates="test",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+
+class DomainTestResult(SQLModel, table=True):
+    """Persistence model for domain.tests.TestResult objects"""
+    __tablename__ = "domain_test_results"
+
+    id: str = Field(default_factory=lambda: f"result-{uuid4()}", primary_key=True)
+
+    test_id: str = Field(foreign_key="domain_tests.id", index=True)
+
+    # Output and analysis stored as JSON
+    output: Any = Field(default=None, sa_column=Column(JSON))
+    analysis: Any = Field(default=None, sa_column=Column(JSON))
+
+    started_at: datetime = Field(default_factory=_utcnow)
+    finished_at: datetime = Field(default_factory=_utcnow)
+
+    test: Optional["DomainTest"] = Relationship(back_populates="test_results")

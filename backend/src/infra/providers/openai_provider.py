@@ -22,7 +22,6 @@ class OpenAIProvider(ModelProvider):
 
 		messages = self._build_messages(request)
 		payload: Dict[str, Any] = {
-			"temperature": request.temperature,
 			"model": config.model_name,
 		}
 
