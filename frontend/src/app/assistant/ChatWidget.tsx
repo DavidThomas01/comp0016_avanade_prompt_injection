@@ -15,24 +15,25 @@ export function ChatWidget() {
       }}
     >
       <div className="relative">
-        <div
-          className={`absolute bottom-16 right-0 transition-all duration-200 ${
-            open
-              ? 'opacity-100 translate-y-0'
-              : 'opacity-0 pointer-events-none translate-y-2'
-          }`}
-        >
-          <ChatPanel variant="compact" onClose={() => setOpen(false)} />
-        </div>
+        {open && (
+          <div className="mb-3">
+            <ChatPanel variant="compact" onClose={() => setOpen(false)} />
+          </div>
+        )}
 
         <button
-          onClick={() => setOpen(prev => !prev)}
-          className={`flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-colors ${
-            open ? 'bg-gray-900 text-white' : 'bg-orange-500 text-white'
-          }`}
+          type="button"
+          onClick={() => setOpen(v => !v)}
           aria-label={open ? 'Close assistant' : 'Open assistant'}
+          className="h-12 w-12 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 focus-ring"
+          style={{
+            background:
+              'linear-gradient(135deg, rgba(17,24,39,1) 0%, rgba(249,115,22,1) 100%)',
+          }}
         >
-          {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
+          <div className="w-full h-full flex items-center justify-center text-white">
+            {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
+          </div>
         </button>
       </div>
     </div>

@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Info, Plus, Play, Send, Trash2 } from 'lucide-react';
+import {
+  Info,
+  Plus,
+  Play,
+  Send,
+  Trash2,
+  ChevronDown,
+  CheckCircle2,
+  XCircle,
+  Sparkles,
+  Folder,
+  FlaskConical,
+} from 'lucide-react';
 
 import { mitigations } from '../data/mitigations';
 
@@ -152,6 +164,10 @@ export function TestingPage() {
   const selectedMitigationSet = useMemo(() => {
     return new Set(selectedTest?.requiredMitigations ?? []);
   }, [selectedTest]);
+
+  const activeMitigationCount = selectedTest?.requiredMitigations?.length ?? 0;
+  const totalMitigations = mitigations.length;
+  const mitigationPct = totalMitigations > 0 ? Math.round((activeMitigationCount / totalMitigations) * 100) : 0;
 
   /* ---------------- Create Suite Modal ---------------- */
 
@@ -379,34 +395,75 @@ export function TestingPage() {
     });
   };
 
+  /* ---------------- UI helpers ---------------- */
+
+  const toggleExpandedSuite = (suiteId: string) => {
+    setExpandedSuiteIds(prev => {
+      const next = new Set(prev);
+      if (next.has(suiteId)) next.delete(suiteId);
+      else next.add(suiteId);
+      return next;
+    });
+  };
+
+  const selectedModelLabel =
+    selectedTest?.modelConfig?.mode === 'existing'
+      ? selectedTest.modelConfig.modelId
+      : selectedTest?.modelConfig?.mode === 'custom'
+      ? 'custom'
+      : '—';
+
   /* ---------------- Render ---------------- */
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="min-h-[calc(100vh-64px)]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+        {/* Header */}
+        <div className="mb-7">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-gray-700">
+            <FlaskConical className="h-3.5 w-3.5 text-orange-600" />
+            Backend-driven test runner
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold">
+            <span className="gradient-text">Testing</span>
+          </h1>
+          <p className="text-gray-700 mt-2">
+            Create suites and tests, select mitigations, and run prompts against the backend runner.
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* ---------------- Left: Suites & Tests ---------------- */}
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="font-semibold">Test Suites</h2>
-              <div className="text-xs text-gray-500 mt-1">Folders & tests (persisted)</div>
-            </div>
+          <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
+            <div className="p-4 border-b border-white/60 bg-white/40">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold flex items-center gap-2">
+                    <Folder className="h-4 w-4 text-orange-600" />
+                    Test Suites
+                  </h2>
+                  <div className="text-xs text-gray-600 mt-1">Folders & tests (persisted)</div>
+                </div>
 
-            <div className="p-4 space-y-3">
-              {/* Run/Save */}
-              <div className="space-y-2">
+                <div className="text-[11px] px-3 py-1 rounded-full bg-white/60 border border-white/60 text-gray-700">
+                  {isLoading ? 'Loading…' : `${suites.length} suites`}
+                </div>
+              </div>
+
+              {/* Primary actions */}
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => runSelectedTest()}
                   disabled={!selectedTest || isLoading}
-                  className={`w-full py-2 rounded flex items-center justify-center gap-2 ${
+                  className={`py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-all focus-ring ${
                     selectedTest && !isLoading
-                      ? 'bg-gray-800 text-white hover:bg-gray-900'
-                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      ? 'bg-gray-900 text-white border-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                      : 'bg-white/40 text-gray-400 border-white/60 cursor-not-allowed'
                   }`}
                 >
                   <Play className="w-4 h-4" />
-                  <span>Run Current Test</span>
+                  <span className="text-sm font-semibold">Run</span>
                 </button>
 
                 <button
@@ -420,157 +477,193 @@ export function TestingPage() {
                     }
                   }}
                   disabled={!canSaveCurrentTest}
-                  className={`w-full py-2 rounded flex items-center justify-center gap-2 ${
+                  className={`py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-all focus-ring ${
                     canSaveCurrentTest
-                      ? 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      ? 'bg-white/60 text-gray-900 border-white/60 hover:bg-white/80 hover:shadow-sm'
+                      : 'bg-white/40 text-gray-400 border-white/60 cursor-not-allowed'
                   }`}
-                  title={canSaveCurrentTest ? 'Persist current test to backend' : 'Select a test first'}
+                  title={canSaveCurrentTest ? 'Persist current test to backend' : 'Add a prompt override first'}
                 >
-                  <Play className="w-4 h-4" />
-                  <span>Save Current Test</span>
+                  <Sparkles className="w-4 h-4 text-orange-600" />
+                  <span className="text-sm font-semibold">Save</span>
                 </button>
               </div>
             </div>
 
-            {/* Suites list */}
-            {suites.map(suite => {
-              const suiteTests = suiteIdToTests.get(suite.id) ?? [];
-              const isExpanded = expandedSuiteIds.has(suite.id);
+            <div className="p-3 space-y-3">
+              {suites.map(suite => {
+                const suiteTests = suiteIdToTests.get(suite.id) ?? [];
+                const isExpanded = expandedSuiteIds.has(suite.id);
 
-              return (
-                <div key={suite.id} className="bg-white border border-gray-200 rounded">
-                  <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                return (
+                  <div
+                    key={suite.id}
+                    className="rounded-3xl border border-white/60 bg-white/40 overflow-hidden"
+                  >
+                    <div className="p-4 flex items-center justify-between gap-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          setExpandedSuiteIds(prev => {
-                            const next = new Set(prev);
-                            if (next.has(suite.id)) next.delete(suite.id);
-                            else next.add(suite.id);
-                            return next;
-                          });
-                        }}
-                        className="text-left font-medium"
+                        onClick={() => toggleExpandedSuite(suite.id)}
+                        className="flex items-center gap-2 text-left min-w-0 focus-ring rounded-2xl px-2 py-1 hover:bg-white/60 transition-colors"
                         title="Expand/collapse"
                       >
-                        {suite.name}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="text-gray-400 hover:text-gray-600"
-                        title="Suite details"
-                        onClick={() => {
-                          alert(suite.description || 'No description');
-                        }}
-                      >
-                        <Info className="w-4 h-4" />
-                      </button>
-
-                      <span className="text-xs text-gray-400">{suiteTests.length}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => openAddTestModal(suite.id)}
-                        className="p-1 rounded hover:bg-gray-100"
-                        title="Add test"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          deleteSuite(suite);
-                        }}
-                        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-600"
-                        title="Delete suite (backend)"
-                        aria-label="Delete suite"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="p-2 space-y-1">
-                      {suiteTests.length === 0 ? (
-                        <div className="text-xs text-gray-400 px-2 py-3">
-                          No tests yet. Click “+” to add one.
-                        </div>
-                      ) : (
-                        suiteTests.map(test => (
-                          <div
-                            key={test.id}
-                            onClick={() => {
-                              setSelectedTest(test);
-                              setRunResult(null);
-                            }}
-                            className={`p-2 rounded cursor-pointer border ${
-                              selectedTest?.id === test.id
-                                ? 'border-orange-500 bg-orange-50'
-                                : 'border-transparent hover:bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="font-medium text-sm truncate">{test.name}</div>
-                                <div className="text-xs text-gray-500 mt-0.5">
-                                  {test.requiredMitigations?.length ?? 0} active mitigations
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  deleteTest(test.id);
-                                }}
-                                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                                title="Delete (backend)"
-                                aria-label="Delete test"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
+                        <ChevronDown
+                          className={`h-4 w-4 text-gray-500 transition-transform ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm text-gray-900 truncate">
+                            {suite.name}
                           </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                          <div className="text-[11px] text-gray-600">
+                            {suiteTests.length} test{suiteTests.length === 1 ? '' : 's'}
+                          </div>
+                        </div>
+                      </button>
 
-            {/* Add Folder Button (bottom) */}
-            <div className="flex justify-center pt-2">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="p-2 rounded-full hover:bg-white/60 transition-colors focus-ring text-gray-600"
+                          title="Suite details"
+                          onClick={() => {
+                            alert(suite.description || 'No description');
+                          }}
+                        >
+                          <Info className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => openAddTestModal(suite.id)}
+                          className="p-2 rounded-full hover:bg-white/60 transition-colors focus-ring text-gray-700"
+                          title="Add test"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            deleteSuite(suite);
+                          }}
+                          className="p-2 rounded-full hover:bg-white/60 transition-colors focus-ring text-gray-500 hover:text-red-700"
+                          title="Delete suite (backend)"
+                          aria-label="Delete suite"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="px-3 pb-3">
+                        {suiteTests.length === 0 ? (
+                          <div className="text-xs text-gray-600 px-3 py-4 rounded-2xl bg-white/50 border border-white/60">
+                            No tests yet. Click “+” to add one.
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {suiteTests.map(test => {
+                              const active = selectedTest?.id === test.id;
+
+                              return (
+                                <div
+                                  key={test.id}
+                                  onClick={() => {
+                                    setSelectedTest(test);
+                                    setRunResult(null);
+                                  }}
+                                  className={`group p-3 rounded-2xl cursor-pointer border transition-all ${
+                                    active
+                                      ? 'border-orange-500/40 bg-orange-500/10'
+                                      : 'border-white/60 bg-white/50 hover:bg-white/70 hover:shadow-sm'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="font-semibold text-sm text-gray-900 truncate">
+                                        {test.name}
+                                      </div>
+                                      <div className="text-[11px] text-gray-600 mt-1">
+                                        {test.requiredMitigations?.length ?? 0} active mitigations
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        deleteTest(test.id);
+                                      }}
+                                      className="p-2 rounded-full hover:bg-white/60 transition-colors focus-ring text-gray-500 hover:text-gray-900"
+                                      title="Delete (backend)"
+                                      aria-label="Delete test"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
               <button
                 type="button"
                 onClick={() => setIsCreateSuiteOpen(true)}
-                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg
-                          text-gray-500 hover:border-orange-500 hover:text-orange-500
-                          flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-3 rounded-3xl border border-dashed border-white/60 bg-white/30 hover:bg-white/50 hover:shadow-sm transition-all flex items-center justify-center gap-2 text-gray-700 focus-ring"
                 title="Create new folder"
                 aria-label="Create folder"
               >
-                <Plus className="w-4 h-4" />
-                <span>Create suite</span>
+                <Plus className="w-4 h-4 text-orange-600" />
+                <span className="text-sm font-semibold">Create suite</span>
               </button>
             </div>
           </div>
 
           {/* ---------------- Middle: Mitigations ---------------- */}
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="font-semibold">Mitigations</h2>
-              <p className="text-xs text-gray-500 mt-1">
-                Highlighted mitigations match the selected test.
-              </p>
+          <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
+            <div className="p-4 border-b border-white/60 bg-white/40">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">Mitigations</h2>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Highlighted mitigations match the selected test.
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-[11px] text-gray-600">Active</div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    {activeMitigationCount} / {totalMitigations}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-[11px] text-gray-600 mb-1">
+                  <span>Coverage</span>
+                  <span>{mitigationPct}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-white/60 border border-white/60 overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${mitigationPct}%`,
+                      background:
+                        'linear-gradient(90deg, rgba(249,115,22,1) 0%, rgba(236,72,153,1) 100%)',
+                    }}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="p-4 space-y-3">
@@ -579,35 +672,66 @@ export function TestingPage() {
                 return (
                   <div
                     key={m.id}
-                    className={`p-3 border-2 rounded ${
-                      active ? 'border-green-500 bg-green-50' : 'border-gray-200'
+                    className={`p-4 rounded-2xl border transition-all ${
+                      active
+                        ? 'border-green-500/25 bg-green-500/10'
+                        : 'border-white/60 bg-white/40'
                     }`}
                   >
-                    <div className="text-sm font-medium">{m.name}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-gray-900">{m.name}</div>
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${
+                          active
+                            ? 'bg-green-500/10 text-green-700 border-green-500/20'
+                            : 'bg-gray-900/5 text-gray-700 border-gray-900/10'
+                        }`}
+                      >
+                        {active ? 'ACTIVE' : 'INACTIVE'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-700 mt-2 leading-relaxed">
+                      {m.description}
+                    </div>
                   </div>
                 );
               })}
             </div>
-
-            <div className="p-4">
-              <div className="bg-gray-100 rounded p-4">
-                <div className="text-xs text-gray-500 mb-2">Active Mitigations</div>
-                <div className="text-2xl font-bold text-orange-500">
-                  {(selectedTest?.requiredMitigations?.length ?? 0)} / {mitigations.length}
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* ---------------- Right: Run & Prompt ---------------- */}
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="font-semibold">{selectedTest?.name ?? 'Select a test'}</h2>
-              <div className="text-xs text-gray-500 mt-1">
-                Model:{' '}
-                {selectedTest?.modelConfig?.mode === 'existing'
-                  ? selectedTest.modelConfig.modelId
-                  : 'custom'}
+          <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
+            <div className="p-4 border-b border-white/60 bg-white/40">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-semibold truncate">
+                    {selectedTest?.name ?? 'Select a test'}
+                  </h2>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Model: <span className="font-semibold text-gray-900">{selectedModelLabel}</span>
+                  </div>
+                </div>
+
+                {runResult ? (
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full border ${
+                      runResult.passed
+                        ? 'bg-green-500/10 text-green-700 border-green-500/20'
+                        : 'bg-red-500/10 text-red-700 border-red-500/20'
+                    }`}
+                  >
+                    {runResult.passed ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <XCircle className="h-4 w-4" />
+                    )}
+                    {runResult.passed ? 'PASSED' : 'FAILED'}
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-3 py-1 rounded-full bg-white/60 border border-white/60 text-gray-700">
+                    {selectedTest ? 'Ready' : '—'}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -616,33 +740,49 @@ export function TestingPage() {
                 value={promptOverride}
                 onChange={e => setPromptOverride(e.target.value)}
                 placeholder="Enter test prompt (optional override)…"
-                className="w-full h-36 px-3 py-2 border rounded resize-none"
+                className="w-full h-40 resize-none rounded-2xl border border-white/60 bg-white/60 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus-ring"
               />
 
               <button
                 type="button"
                 onClick={() => runSelectedTest()}
                 disabled={!selectedTest || isLoading}
-                className={`w-full py-3 rounded text-white flex items-center justify-center gap-2 ${
-                  selectedTest && !isLoading ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-300'
+                className={`w-full py-3 rounded-2xl text-white flex items-center justify-center gap-2 border transition-all focus-ring ${
+                  selectedTest && !isLoading
+                    ? 'border-gray-900 bg-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                    : 'border-white/60 bg-white/40 text-gray-400 cursor-not-allowed'
                 }`}
               >
                 <Send className="w-4 h-4" />
-                <span>Send</span>
+                <span className="font-semibold">{isLoading ? 'Running…' : 'Send'}</span>
               </button>
 
-              <div className="text-xs text-gray-500">Backend: {API_BASE}</div>
+              <div className="text-[11px] text-gray-600">
+                Backend: <span className="font-semibold text-gray-900">{API_BASE}</span>
+              </div>
 
               {runResult && (
-                <div className="mt-4 border rounded p-3">
-                  <div className="text-sm font-medium mb-2">Run Result</div>
-                  <div className="text-xs text-gray-500">
-                    passed: <span className="font-semibold">{String(runResult.passed)}</span>
+                <div className="mt-3 rounded-3xl border border-white/60 bg-white/40 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-white/60 bg-white/40 flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-gray-900">Run Result</div>
+                    <div className="text-[11px] text-gray-600">
+                      mitigations: <span className="font-semibold text-gray-900">{runResult.activeMitigations.length}</span>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-2">response:</div>
-                  <pre className="text-xs bg-gray-50 border rounded p-2 overflow-auto">
-                    {runResult.modelResponse}
-                  </pre>
+
+                  <div className="p-4 space-y-3">
+                    <div className="text-xs text-gray-600">
+                      passed:{' '}
+                      <span className="font-semibold text-gray-900">{String(runResult.passed)}</span>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-gray-600 mb-2">response:</div>
+                      <pre className="text-xs bg-gray-950 text-emerald-100 border border-white/10 rounded-2xl p-4 overflow-auto whitespace-pre-wrap break-words">
+                        {runResult.modelResponse}
+                      </pre>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -662,13 +802,13 @@ export function TestingPage() {
               value={newSuiteName}
               onChange={e => setNewSuiteName(e.target.value)}
               placeholder="Suite name"
-              className="w-full px-3 py-2 border rounded"
+              className="w-full px-4 py-2.5 rounded-2xl border border-white/60 bg-white/70 text-sm focus-ring"
             />
             <textarea
               value={newSuiteDescription}
               onChange={e => setNewSuiteDescription(e.target.value)}
               placeholder="Description (optional)"
-              className="w-full h-24 px-3 py-2 border rounded resize-none"
+              className="w-full h-24 px-4 py-3 rounded-2xl border border-white/60 bg-white/70 text-sm resize-none focus-ring"
             />
           </div>
 
@@ -676,7 +816,7 @@ export function TestingPage() {
             <button
               type="button"
               onClick={() => setIsCreateSuiteOpen(false)}
-              className="px-4 py-2 border rounded"
+              className="px-4 py-2 rounded-2xl border border-white/60 bg-white/60 hover:bg-white/80 transition-colors focus-ring"
             >
               Cancel
             </button>
@@ -692,8 +832,10 @@ export function TestingPage() {
                 }
               }}
               disabled={!canCreateSuite}
-              className={`px-4 py-2 rounded text-white ${
-                canCreateSuite ? 'bg-orange-500' : 'bg-gray-300'
+              className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
+                canCreateSuite
+                  ? 'bg-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                  : 'bg-gray-300 cursor-not-allowed'
               }`}
             >
               Create
@@ -714,11 +856,11 @@ export function TestingPage() {
               value={newTestTitle}
               onChange={e => setNewTestTitle(e.target.value)}
               placeholder="Test name"
-              className="w-full px-3 py-2 border rounded"
+              className="w-full px-4 py-2.5 rounded-2xl border border-white/60 bg-white/70 text-sm focus-ring"
             />
 
             <Tabs value={addTestTab} onValueChange={v => setAddTestTab(v as AddTestTab)}>
-              <TabsList className="w-full">
+              <TabsList className="w-full bg-white/60 border border-white/60">
                 <TabsTrigger value="existing" className="flex-1">
                   Existing model
                 </TabsTrigger>
@@ -731,7 +873,7 @@ export function TestingPage() {
                 <select
                   value={newTestModelId}
                   onChange={e => setNewTestModelId(e.target.value)}
-                  className="w-full px-3 py-2 border rounded mt-2"
+                  className="w-full px-4 py-2.5 rounded-2xl border border-white/60 bg-white/70 text-sm mt-2 focus-ring"
                 >
                   {AI_MODELS.map(m => (
                     <option key={m.id} value={m.id}>
@@ -739,7 +881,7 @@ export function TestingPage() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-gray-600 mt-2">
                   Uses backend mock provider for now (no real API calls yet).
                 </p>
               </TabsContent>
@@ -751,34 +893,52 @@ export function TestingPage() {
                   value={newTestApiKey}
                   onChange={e => setNewTestApiKey(e.target.value)}
                   placeholder="API key"
-                  className="w-full px-3 py-2 border rounded mt-2"
+                  className="w-full px-4 py-2.5 rounded-2xl border border-white/60 bg-white/70 text-sm mt-2 focus-ring"
                 />
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-gray-600 mt-2">
                   The backend should not log or persist API keys. (Currently runs are mocked.)
                 </p>
               </TabsContent>
             </Tabs>
 
             <div>
-              <div className="text-sm font-medium mb-2">Mitigations implemented</div>
+              <div className="text-sm font-semibold mb-2">Mitigations implemented</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {mitigations.map(m => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => toggleNewTestMitigation(m.id)}
-                    className={`p-3 border-2 rounded text-left ${
-                      newTestMitigations.includes(m.id)
-                        ? 'border-green-500 bg-green-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="text-sm font-medium">{m.name}</div>
-                  </button>
-                ))}
+                {mitigations.map(m => {
+                  const active = newTestMitigations.includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggleNewTestMitigation(m.id)}
+                      className={`p-4 rounded-2xl border text-left transition-all focus-ring ${
+                        active
+                          ? 'border-green-500/25 bg-green-500/10'
+                          : 'border-white/60 bg-white/50 hover:bg-white/70 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-gray-900">{m.name}</div>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${
+                            active
+                              ? 'bg-green-500/10 text-green-700 border-green-500/20'
+                              : 'bg-gray-900/5 text-gray-700 border-gray-900/10'
+                          }`}
+                        >
+                          {active ? 'ON' : 'OFF'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-700 mt-2 leading-relaxed line-clamp-2">
+                        {m.description}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="text-xs text-gray-500 mt-2">
-                You can create a test with <span className="font-semibold">0 mitigations</span>.
+
+              <div className="text-xs text-gray-600 mt-2">
+                You can create a test with <span className="font-semibold text-gray-900">0 mitigations</span>.
               </div>
             </div>
           </div>
@@ -790,7 +950,7 @@ export function TestingPage() {
                 setIsAddTestOpen(false);
                 setTargetSuiteId(null);
               }}
-              className="px-4 py-2 border rounded"
+              className="px-4 py-2 rounded-2xl border border-white/60 bg-white/60 hover:bg-white/80 transition-colors focus-ring"
             >
               Cancel
             </button>
@@ -806,8 +966,10 @@ export function TestingPage() {
                 }
               }}
               disabled={!canCreateTest}
-              className={`px-4 py-2 rounded text-white ${
-                canCreateTest ? 'bg-orange-500' : 'bg-gray-300'
+              className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
+                canCreateTest
+                  ? 'bg-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                  : 'bg-gray-300 cursor-not-allowed'
               }`}
             >
               Add test
