@@ -47,7 +47,7 @@ async def improve_prompt_structure(
         model="gpt-5-nano",
         messages=[Message(role="system", content=improvement_system_message),
                   Message(role="user", content=original_prompt)],
-        temperature=0.3,  # Allow some creative restructuring
+        temperature=1,
     )
     
     response = await provider_router.generate(request)
@@ -146,7 +146,7 @@ Respond with JSON ONLY (no markdown, no extra text):
             Message(role="system", content=verification_system_message),
             Message(role="user", content=verification_user_message)
         ],
-        temperature=0.0,  # Deterministic verification
+        temperature=1,
     )
     
     response = await provider_router.generate(request)
@@ -165,7 +165,7 @@ async def enhance_prompt_with_validation(
     original_prompt: str,
     mitigation_ids: List[str],
     provider_router: ProviderRouter,
-    max_retries: int = 3,
+    max_retries: int = 1,
 ) -> Dict[str, Any]:
     """
     Three-stage enhancement pipeline with retries.

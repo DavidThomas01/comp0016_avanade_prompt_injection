@@ -1,8 +1,12 @@
 # backend/src/api/server.py
 from __future__ import annotations
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load environment variables from .env file
+load_dotenv()
 
 from api.routes.suites import router as suites_router
 from api.routes.tests import router as tests_router
