@@ -69,12 +69,12 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
     if (!canSend) return;
     const trimmed = input.trim();
     setInput('');
-    
+
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-    
+
     const userMessage = createMessage('user', trimmed);
     setMessages(prev => [...prev, userMessage]);
     setIsSending(true);
@@ -109,31 +109,41 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
 
   return (
     <div
-      className={`flex flex-col bg-white border border-gray-200 rounded-xl shadow-lg ${
-        variant === 'compact' ? 'w-[360px] sm:w-[380px]' : 'w-full'
+      className={`flex flex-col glass-strong border border-white/60 rounded-3xl shadow-lg overflow-hidden ${
+        variant === 'compact' ? 'w-[360px] sm:w-[390px]' : 'w-full'
       }`}
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-orange-500/10 text-orange-600 flex items-center justify-center">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/60 bg-white/40">
+        <div className="flex items-center gap-3">
+          <div
+            className="h-9 w-9 rounded-2xl flex items-center justify-center text-white shadow-sm"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(17,24,39,1) 0%, rgba(249,115,22,1) 100%)',
+            }}
+          >
             <MessageSquare className="h-4 w-4" />
           </div>
+
           <div>
             <div className="text-sm font-semibold text-gray-900">
               Security Knowledge Assistant
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-600">
               {messageCount > 0
                 ? `${messageCount} question${messageCount === 1 ? '' : 's'} asked`
                 : 'Ask a question to get started'}
             </div>
           </div>
         </div>
+
         <div className="flex items-center gap-2">
           {variant === 'compact' && (
             <button
+              type="button"
               onClick={openFullView}
-              className="text-xs text-gray-600 hover:text-gray-900 flex items-center gap-1"
+              className="text-xs text-gray-700 hover:text-gray-900 inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-white/60 transition-colors focus-ring"
             >
               Expand
               <ExternalLink className="h-3 w-3" />
@@ -141,8 +151,9 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
           )}
           {variant === 'compact' && (
             <button
+              type="button"
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-500 hover:text-gray-800 rounded-full p-2 hover:bg-white/60 transition-colors focus-ring"
               aria-label="Close assistant"
             >
               <X className="h-4 w-4" />
@@ -151,6 +162,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
         </div>
       </div>
 
+      {/* Messages */}
       <div className="flex-1 min-h-0">
         <div
           ref={scrollRef}
@@ -158,80 +170,101 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             variant === 'compact' ? 'h-[380px]' : 'h-[calc(100vh-400px)]'
           } py-4`}
         >
-          {messages.map(message => (
-            <div
-              key={message.id}
-              className={`flex ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
-            >
+          {messages.map(message => {
+            const isUser = message.role === 'user';
+            return (
               <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
-                  message.role === 'user'
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-gray-100 text-gray-800'
-                }`}
+                key={message.id}
+                className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
               >
-                <div>{message.content}</div>
-                {message.role === 'assistant' && message.related && (
-                  <div className="mt-3 space-y-2 text-xs text-gray-600">
-                    {message.related.vulnerabilities?.length ? (
-                      <div className="space-y-1">
-                        <div className="font-semibold text-gray-700">
-                          Relevant vulnerabilities
-                        </div>
-                        {message.related.vulnerabilities.map(vulnerability => (
-                          <a
-                            key={vulnerability.id}
-                            href={`/vulnerability/${vulnerability.id}`}
-                            className="block hover:text-orange-600"
-                          >
-                            {vulnerability.name}
-                          </a>
-                        ))}
-                      </div>
-                    ) : null}
-                    {message.related.mitigations?.length ? (
-                      <div className="space-y-1">
-                        <div className="font-semibold text-gray-700">
-                          Relevant mitigations
-                        </div>
-                        {message.related.mitigations.map(mitigation => (
-                          <div key={mitigation.id}>
-                            <div className="font-medium text-gray-700">
-                              {mitigation.name}
-                            </div>
-                            <div>{mitigation.description}</div>
+                <div
+                  className={`max-w-[85%] rounded-3xl px-4 py-3 text-sm border ${
+                    isUser
+                      ? 'text-white border-white/10'
+                      : 'text-gray-800 bg-white/70 border-white/60'
+                  }`}
+                  style={
+                    isUser
+                      ? {
+                          background:
+                            'linear-gradient(135deg, rgba(249,115,22,1) 0%, rgba(236,72,153,1) 100%)',
+                        }
+                      : undefined
+                  }
+                >
+                  <div className="leading-relaxed whitespace-pre-wrap">{message.content}</div>
+
+                  {message.role === 'assistant' && message.related && (
+                    <div className="mt-3 space-y-3 text-xs text-gray-700">
+                      {message.related.vulnerabilities?.length ? (
+                        <div className="space-y-2">
+                          <div className="font-semibold text-gray-900">
+                            Relevant vulnerabilities
                           </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {message.related.suggestions?.length ? (
-                      <div className="space-y-1">
-                        <div className="font-semibold text-gray-700">
-                          Try asking
+                          <div className="flex flex-wrap gap-2">
+                            {message.related.vulnerabilities.map(vulnerability => (
+                              <a
+                                key={vulnerability.id}
+                                href={`/vulnerability/${vulnerability.id}`}
+                                className="px-2 py-1 rounded-full bg-gray-900/5 border border-gray-900/10 hover:border-orange-500/30 hover:bg-orange-500/10 transition-colors"
+                              >
+                                {vulnerability.name}
+                              </a>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {message.related.suggestions.map(suggestion => (
-                            <button
-                              key={suggestion}
-                              onClick={() => setInput(suggestion)}
-                              className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 hover:border-orange-300 hover:text-orange-700"
-                            >
-                              {suggestion}
-                            </button>
-                          ))}
+                      ) : null}
+
+                      {message.related.mitigations?.length ? (
+                        <div className="space-y-2">
+                          <div className="font-semibold text-gray-900">
+                            Relevant mitigations
+                          </div>
+                          <div className="space-y-2">
+                            {message.related.mitigations.map(mitigation => (
+                              <div
+                                key={mitigation.id}
+                                className="rounded-2xl bg-white/60 border border-white/60 p-3"
+                              >
+                                <div className="font-semibold text-gray-900">
+                                  {mitigation.name}
+                                </div>
+                                <div className="text-gray-700 mt-1 leading-relaxed">
+                                  {mitigation.description}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
+                      ) : null}
+
+                      {message.related.suggestions?.length ? (
+                        <div className="space-y-2">
+                          <div className="font-semibold text-gray-900">Try asking</div>
+                          <div className="flex flex-wrap gap-2">
+                            {message.related.suggestions.map(suggestion => (
+                              <button
+                                key={suggestion}
+                                type="button"
+                                onClick={() => setInput(suggestion)}
+                                className="rounded-full border border-white/60 bg-white/60 px-2 py-1 text-[11px] text-gray-700 hover:bg-white/80 hover:border-orange-500/30 transition-colors focus-ring"
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+
           {isSending && (
             <div className="flex justify-start">
-              <div className="rounded-2xl bg-gray-100 px-4 py-3 text-sm text-gray-600">
+              <div className="rounded-3xl bg-white/70 border border-white/60 px-4 py-3 text-sm text-gray-700">
                 Thinking...
               </div>
             </div>
@@ -239,7 +272,8 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
         </div>
       </div>
 
-      <div className="border-t border-gray-100 px-4 py-3">
+      {/* Input */}
+      <div className="border-t border-white/60 px-4 py-3 bg-white/40">
         <div className="flex items-end gap-2">
           <textarea
             ref={textareaRef}
@@ -248,15 +282,16 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             onKeyDown={handleKeyDown}
             rows={1}
             placeholder="Ask about vulnerabilities, mitigations, or testing..."
-            className="flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none overflow-y-hidden min-h-[40px]"
+            className="flex-1 resize-none rounded-2xl border border-white/60 bg-white/60 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 overflow-y-hidden min-h-[40px] focus-ring"
           />
           <button
+            type="button"
             onClick={handleSend}
             disabled={!canSend}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-lg ${
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition-all focus-ring ${
               canSend
-                ? 'bg-orange-500 text-white hover:bg-orange-600'
-                : 'bg-gray-200 text-gray-400'
+                ? 'bg-gray-900 text-white border-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                : 'bg-white/40 text-gray-400 border-white/60 cursor-not-allowed'
             }`}
             aria-label="Send message"
           >
