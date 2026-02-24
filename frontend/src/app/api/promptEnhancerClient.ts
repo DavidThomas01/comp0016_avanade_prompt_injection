@@ -24,7 +24,8 @@ export async function enhancePrompt(
   selectedMitigationIds: string[],
   maxRetries: number = 3
 ): Promise<PromptEnhancementResponse> {
-  const response = await fetch('/api/prompt-enhancements', {
+  const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:8080/api';
+  const response = await fetch(`${apiBase}/prompt-enhancements`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
