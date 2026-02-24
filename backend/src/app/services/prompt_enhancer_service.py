@@ -165,7 +165,7 @@ async def enhance_prompt_with_validation(
     original_prompt: str,
     mitigation_ids: List[str],
     provider_router: ProviderRouter,
-    max_retries: int = 1,
+    max_retries: int = 3,
 ) -> Dict[str, Any]:
     """
     Three-stage enhancement pipeline with retries.
