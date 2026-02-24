@@ -1,0 +1,52 @@
+from sqlalchemy.orm import Session
+from dataclasses import asdict
+
+from domain.tests import *
+
+from .models import TestModel
+
+class TestRepository:
+
+    def create(self, db: Session, test: Test) -> Test:
+
+        db_test = TestModel(
+            id=test.id,
+            name=test.name,
+            model=asdict(test.model),
+            environment=asdict(test.environment) if test.environment else None,
+            runner=asdict(test.runner),
+            created_at=test.created_at,
+        )
+
+        db.add(db_test)
+        db.commit()
+        db.refresh(db_test)
+
+        return self._to_domain(db_test)
+
+
+    def get_by_id(self, db: Session, test_id: str) -> Test | None:
+        row = db.query(TestModel).filter(TestModel.id == test_id).first()
+
+        if not row:
+            return None
+
+        return self._to_domain(row)
+
+
+    def list_all(self, db: Session) -> list[Test]:
+        rows = db.query(TestModel).all()
+        return [self._to_domain(row) for row in rows]
+
+
+    def _to_domain(self, row: TestModel) -> Test:
+
+        return Test(
+            id=row.id,
+            name=row.name,
+            model=ModelSpec(**row.model),
+            environment=EnvironmentSpec(**row.environment)
+            if row.environment else None,
+            runner=RunnerSpec(**row.runner),
+            created_at=row.created_at,
+        )
