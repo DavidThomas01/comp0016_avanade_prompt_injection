@@ -3,9 +3,11 @@ from enum import Enum
 from typing import Optional, List
 from domain.providers.base_provider import Message
 
+
 class RunnerType(str, Enum):
     PROMPT = "prompt"
     FRAMEWORK = "framework"
+
 
 @dataclass
 class RunnerSpec:

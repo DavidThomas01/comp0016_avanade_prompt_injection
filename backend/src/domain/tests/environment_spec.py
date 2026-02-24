@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List, Optional
 
 
-class EnvType(Enum):
+class EnvType(str, Enum):
     MITIGATION = "mitigation"
     CUSTOM = "custom"
 

@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Optional
 
 
-class ModelType(Enum):
+class ModelType(str, Enum):
     PLATFORM = "platform"
     EXTERNAL = "external"
 
