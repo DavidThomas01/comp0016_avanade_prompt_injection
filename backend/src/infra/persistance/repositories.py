@@ -8,7 +8,6 @@ from .models import TestModel
 class TestRepository:
 
     def create(self, db: Session, test: Test) -> Test:
-
         db_test = TestModel(
             id=test.id,
             name=test.name,
@@ -23,6 +22,20 @@ class TestRepository:
         db.refresh(db_test)
 
         return self._to_domain(db_test)
+    
+
+    def update(self, db: Session, updated_test: Test) -> Test:
+        test = db.query(TestModel).filter(TestModel.id == updated_test.id).first()
+        
+        test.name = updated_test.name
+        test.model = asdict(updated_test.model)
+        test.environment = asdict(updated_test.environment) if updated_test.environment else None
+        test.runner = asdict(updated_test.runner)
+        
+        db.commit()
+        db.refresh(test)
+        
+        return self._to_domain(test)
 
 
     def get_by_id(self, db: Session, test_id: str) -> Test | None:
@@ -40,7 +53,6 @@ class TestRepository:
 
 
     def _to_domain(self, row: TestModel) -> Test:
-
         return Test(
             id=row.id,
             name=row.name,
