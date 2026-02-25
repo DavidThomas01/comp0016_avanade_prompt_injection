@@ -1,152 +1,99 @@
+from sqlalchemy.orm import Session
 from domain.prompt.compiler import PromptCompiler
+from domain.providers import Message
 from domain.tests import *
 from infra.config.models import MODEL_REGISTRY
 from infra.config.mitigations import MITIGATION_REGISTRY
 from infra.tests.runners import *
+from infra.persistance.repositories import TestRepository
+
+from .dto import *
+
+from typing import Optional, List
+
+from core.exceptions import *
+
 
 class TestService():
     
-    def create(self, payload: dict) -> Test:
+    def __init__(self, repo: TestRepository):
+        self.repo = repo
         
-        self._require(payload, "model", "runner")
+    
+    def create(self, db: Session, request: CreateTestInput) -> Test:
+        model_spec = ModelSpec.create_from_input(request.model)
+        environment_spec = EnvironmentSpec.create_from_input(request.environment)
+        runner_spec = RunnerSpec.create_from_input(request.runner)
         
-        model_spec = self._build_model(payload["model"])
-        environment_spec = None
-        runner_spec = self._build_runner(payload["runner"])
-        
-        if model_spec.type == ModelType.PLATFORM:
-            self._require(payload, "environment")
-            environment_spec = self._build_environment(payload.get("environment"))
-            
-        return Test.create(
-            name=payload["name"],
+        test = Test.create(
+            name=request.name,
             model=model_spec,
             environment=environment_spec,
             runner=runner_spec,
         )
+        
+        return self.repo.create(db, test)
             
             
-    def update(self, parent: Test, payload: dict) -> Test:
-        model_spec = self._build_model(payload["model"]) if "model" in payload else parent.model
-        if model_spec.type == ModelType.PLATFORM:
-            if "environment" in payload:
-                environment_spec = self._build_environment(payload["environment"])
-            else:
-                environment_spec = parent.environment
-        else:
-            environment_spec = None
-        runner_spec = self._build_runner(payload["runner"]) if "runner" in payload else parent.runner
-        return parent.update(
+    def update(self, db: Session, parent_id: Test, request: UpdateTestInput) -> Test:
+        parent = self.repo.get_by_id(db, parent_id)
+        
+        name = name if request.name else parent.name
+        model_spec = ModelSpec.create_from_input(request.model) if request.model else parent.model
+        environment_spec = EnvironmentSpec.create_from_input(request.environment) if request.environment else parent.environment
+        runner_spec = RunnerSpec.create_from_input(request.runner) if request.runner else parent.runner
+        
+        updated_test = parent.update(
+            name=name,
             model=model_spec,
             environment=environment_spec,
-            runner=runner_spec
+            runner=runner_spec,
+            created_at=parent.created_at
         )
         
-    
-    def _build_model(self, model_payload) -> ModelSpec:
-        if isinstance(model_payload, str):
-            return self._build_platform_model(model_payload)
-        elif isinstance(model_payload, dict):
-            return self._build_external_model(model_payload)
-        raise ValueError(f"model payload structure must be string or object")
-    
-    
-    def _build_platform_model(self, model: str) -> ModelSpec:
-        if model not in MODEL_REGISTRY:
-            raise ValueError(f"unknown platform model: {model}")
-        return ModelSpec.create_from_registry(model)
-    
-    
-    def _build_external_model(self, model_config: dict) -> ModelSpec:
-        required_fields = ["endpoint", "key"]
-        missing = [f for f in required_fields if f not in model_config]
-        if missing:
-            raise ValueError(f"external model missing configuration fields: {missing}")
-        return ModelSpec.create_from_external(model_config)
-
-
-    def _build_runner(self, runner_payload) -> RunnerSpec:
-        if isinstance(runner_payload, str):
-            runner_type = self._parse_runner_type(runner_payload)
-            return RunnerSpec.create_default(runner_type)
-        if isinstance(runner_payload, dict):
-            return self._build_runner_from_dict(runner_payload)
-        raise ValueError("runner payload must be string or object")
+        return self.repo.update(db, updated_test)
         
         
-    def _build_runner_from_dict(self, payload: dict) -> RunnerSpec:
-        runner_type_str = payload.get("type")
-        if not runner_type_str:
-            raise ValueError("runner missing 'type' attribute")
-        runner_type = self._parse_runner_type(runner_type_str)
-        if runner_type == RunnerType.PROMPT:
-            context = payload.get("context", [])
-            return RunnerSpec.create_prompt(context)
-        if runner_type == RunnerType.FRAMEWORK:
-            return RunnerSpec.create_default(RunnerType.FRAMEWORK)
-        return RunnerSpec.create_default(runner_type)
-    
-    
-    def _parse_runner_type(self, value: str) -> RunnerType:
-        try:
-            return RunnerType(value)
-        except ValueError:
-            raise ValueError(f"unknown runner: {value}")
-    
-    
-    def _build_environment(self, env_payload) -> EnvironmentSpec:
-        system_prompt = env_payload.get("system_prompt")
-        mitigations = env_payload.get("mitigations")
-        if system_prompt and not mitigations:
-            return self._build_environment_with_custom_prompt(system_prompt)
-        if mitigations and not system_prompt:
-            return self._build_environment_with_mitigations(mitigations)
-        raise ValueError("environment must include only one of system prompt mitigations")
+    def get(self, id: str) -> Test:
+        test = self.repo.get_by_id(id)
+        
+        if not test:
+            raise NotFoundError("test not found")
             
-    
-    def _build_environment_with_custom_prompt(self, system_prompt: str) -> EnvironmentSpec:
-        return EnvironmentSpec.create_from_prompt(system_prompt)
-        
-        
-    def _build_environment_with_mitigations(self, mitigations: list) -> EnvironmentSpec:
-        self._validate_mitigations(mitigations)
-        system_prompt = self._build_prompt_from_mitigations(mitigations)
-        return EnvironmentSpec.create_from_mitigations(mitigations, system_prompt)
-        
-        
-    def _validate_mitigations(mitigations):
-        invalid_mitigations = [mitigation for mitigation in mitigations if mitigation not in MITIGATION_REGISTRY]
-        if invalid_mitigations:
-            raise ValueError(f"some selected mitigations are not available: {invalid_mitigations}")
+        return test
+            
         
     
-    def _build_prompt_from_mitigations(self, mitigations) -> str:
-        return PromptCompiler.compile(mitigations, None)
-    
-    
-    def _require(self, payload: dict, *required_fields):
-        missing = [f for f in required_fields if f not in payload]
-        if missing:
-            raise ValueError(f"missing required fields: {missing}")
+    def list_all(self) -> List[Test]:
+        return self.repo.list_all()
+            
+            
+    async def run(self, db: Session, id: str, request: RunTestInput) -> TestResult:
+        test = self.repo.get_by_id(db, id)
         
-    
-    async def run(self, test: Test, prompt=None) -> TestResult:
+        if not test:
+            raise NotFoundError("test not found")
         
-        runner = self._resolve_runner(test)
+        runner = self._resolve_runner(test.runner.type)
         
-        result = await runner.run(test, prompt if prompt else None)
-        
-        test.runner.context.extend([prompt, result.output])
-        
-        return result 
-        
-        
-    def _resolve_runner(self, test: Test) -> TestRunner:
+        result = await runner.run(test, Message("user", request.prompt) if request.prompt else None)
         
         if test.runner.type == RunnerType.PROMPT:
+            self._update_context_with_response(db, id, test, request.prompt, result.output)
+        
+        return result 
+    
+    
+    def _resolve_runner(self, runner_type: RunnerType) -> TestRunner:
+        if runner_type == RunnerType.PROMPT:
             return PromptRunner()
-        
-        elif test.runner.type == RunnerType.FRAMEWORK:
+        if runner_type == RunnerType.FRAMEWORK:
             return FrameworkRunner()
-        
-        raise ValueError("test runner is undefined")
+        raise InvalidModelConfiguration(f"unsupported runner type: {runner_type}")
+    
+    
+    def _update_context_with_response(self, db: Session, id: str, test: Test, prompt: str, response: str):
+        test.runner.context.extend([
+            Message(role="user",content=prompt),
+            Message(role="system", content=response)
+        ])
