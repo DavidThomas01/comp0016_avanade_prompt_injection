@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from core.exceptions import InvalidModelConfiguration
+
+
 
 class ModelType(str, Enum):
     PLATFORM = "platform"
@@ -38,12 +41,12 @@ class ModelSpec:
     def validate(self) -> None:
         if self.type == ModelType.PLATFORM:
             if not self.model_id:
-                raise ValueError("platform model requires model id")
+                raise InvalidModelConfiguration("platform model requires model id")
             if self.endpoint or self.key:
-                raise ValueError("platform model cannot include custom endpoint or key")
+                raise InvalidModelConfiguration("platform model cannot include custom endpoint or key")
 
         if self.type == ModelType.EXTERNAL:
             if not self.endpoint or not self.key:
-                raise ValueError("external model requires endpoint and key")
+                raise InvalidModelConfiguration("external model requires endpoint and key")
             if self.model_id:
-                raise ValueError("external model cannot include model id")
+                raise InvalidModelConfiguration("external model cannot include model id")

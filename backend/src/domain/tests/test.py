@@ -4,8 +4,10 @@ from typing import Optional
 import uuid
 
 from .model_spec import ModelSpec, ModelType
-from .environment_spec import EnvironmentSpec
+from .environment_spec import EnvironmentSpec, EnvType
 from .runner_spec import RunnerSpec
+
+from core.exceptions import InvalidModelConfiguration
 
 def new_test_id() -> str:
     return f"test_{uuid.uuid4().hex[:10]}"
@@ -18,6 +20,7 @@ class Test:
     environment: Optional[EnvironmentSpec]
     runner: RunnerSpec
     created_at: datetime
+
 
     @staticmethod
     def create(
@@ -34,8 +37,9 @@ class Test:
             model=model,
             environment=environment,
             runner=runner,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(),
         )
+
 
     def update(
         self,
@@ -44,6 +48,7 @@ class Test:
         model: Optional[ModelSpec] = None,
         environment: Optional[EnvironmentSpec] = None,
         runner: Optional[RunnerSpec] = None,
+        created_at: datetime
     ) -> "Test":
         """
         Create a new version of this test with modifications.
@@ -61,8 +66,9 @@ class Test:
             model=new_model,
             environment=new_env,
             runner=new_runner,
-            created_at=datetime.utcnow(),
+            created_at=created_at,
         )
+
 
     @staticmethod
     def _validate(
@@ -74,12 +80,12 @@ class Test:
         model.validate()
         runner.validate()
 
-        if model.type == ModelType.EXTERNAL:
+        if model.type == ModelType.EXTERNAL or environment.type == EnvType.FRAMEWORK:
             if environment is not None:
-                raise ValueError("external model cannot include environment")
+                raise InvalidModelConfiguration("external model cannot include environment")
             return
 
         if environment is None:
-            raise ValueError("platform model requires environment")
+            raise InvalidModelConfiguration("platform model requires environment")
 
         environment.validate()

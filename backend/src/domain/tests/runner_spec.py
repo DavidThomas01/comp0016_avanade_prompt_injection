@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Optional, List
 from domain.providers.base_provider import Message
 
+from core.exceptions import InvalidModelConfiguration
 
 class RunnerType(str, Enum):
     PROMPT = "prompt"
@@ -39,4 +40,4 @@ class RunnerSpec:
 
         if self.type == RunnerType.FRAMEWORK:
             if self.context:
-                raise ValueError("framework runner cannot include context")
+                raise InvalidModelConfiguration("framework runner cannot include context")

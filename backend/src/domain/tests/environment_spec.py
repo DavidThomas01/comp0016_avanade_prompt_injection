@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+from typing import List
+
+from core.exceptions import InvalidModelConfiguration
+
 
 
 class EnvType(str, Enum):
@@ -12,7 +15,7 @@ class EnvType(str, Enum):
 class EnvironmentSpec:
     type: EnvType
     system_prompt: str
-    mitigations: Optional[List[str]] = field(default_factory=list)
+    mitigations: List[str] = field(default_factory=list)
     
     
     @classmethod
@@ -35,10 +38,10 @@ class EnvironmentSpec:
     def validate(self) -> None:
         if self.type == EnvType.MITIGATION:
             if not self.mitigations:
-                raise ValueError("mitigation setup requires a mitigations list")
+                raise InvalidModelConfiguration("mitigation setup requires a mitigations list")
 
         if self.type == EnvType.CUSTOM:
             if not self.system_prompt:
-                raise ValueError("custom setup requires custom system prompt")
+                raise InvalidModelConfiguration("custom setup requires custom system prompt")
             if self.mitigations:
-                raise ValueError("custom setup cannot include mitigations")
+                raise InvalidModelConfiguration("custom setup cannot include mitigations")
