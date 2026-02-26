@@ -127,7 +127,7 @@ def get_db():
 def create_test(request: CreateTestRequest, db: Session = Depends(get_db), test_service: TestService = Depends(get_test_service)):
     try:
         return test_service.create(db, request.to_dto())
-    except InvalidModelConfiguration as e:
+    except (InvalidModelConfiguration, TypeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -135,7 +135,7 @@ def create_test(request: CreateTestRequest, db: Session = Depends(get_db), test_
 def update_test(test_id: str, request: UpdateTestRequest, db: Session = Depends(get_db), test_service: TestService = Depends(get_test_service)):
     try:
         test_service.update(db, test_id, request.to_dto())
-    except InvalidModelConfiguration as e:
+    except (InvalidModelConfiguration, TypeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
