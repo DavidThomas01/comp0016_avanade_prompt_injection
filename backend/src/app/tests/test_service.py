@@ -22,7 +22,7 @@ class TestService():
     
     def create(self, db: Session, request: CreateTestInput) -> Test:
         model_spec = self._build_model(request.model)
-        environment_spec = self._build_environment(request.environment)
+        environment_spec = self._build_environment(request.environment) if request.environment else None
         runner_spec = self._build_runner(request.runner)
         
         test = Test.create(
@@ -35,14 +35,17 @@ class TestService():
         return self.repo.create(db, test)
             
             
-    def update(self, db: Session, parent_id: Test, request: UpdateTestInput) -> Test:
+    def update(self, db: Session, parent_id: str, request: UpdateTestInput) -> Test:
         parent = self.repo.get_by_id(db, parent_id)
+                        
+        if not parent:
+            raise NotFoundError(f"test not found: {parent_id}")
         
-        name = name if request.name else parent.name
+        name = request.name if request.name else parent.name
         model_spec = self._build_model(request.model) if request.model else parent.model
-        environment_spec = self._build_environment(request.environment) if request.environment else parent.environment
+        environment_spec = self._build_environment(request.environment) if request.environment else (None if model_spec.type == ModelType.EXTERNAL else parent.environment)
         runner_spec = self._build_runner(request.runner) if request.runner else parent.runner
-        
+                
         updated_test = parent.update(
             name=name,
             model=model_spec,
@@ -57,7 +60,7 @@ class TestService():
     def _build_model(self, model_spec_input: ModelSpecInput) -> ModelSpec:
         if model_spec_input.type == ModelType.PLATFORM:
             return ModelSpec.create_platform(model_spec_input.model_id)
-        if model_spec_input == ModelType.EXTERNAL:
+        if model_spec_input.type == ModelType.EXTERNAL:
             return ModelSpec.create_external(model_spec_input.endpoint, model_spec_input.key)
         raise InvalidModelConfiguration(f"invalid model type: {model_spec_input.type}")
     
