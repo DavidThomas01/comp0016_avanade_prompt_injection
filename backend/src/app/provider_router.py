@@ -2,6 +2,8 @@ from domain.providers import ModelRequest, ModelResponse, ModelProvider
 from infra.config.models import MODEL_REGISTRY
 from infra.providers.registry import get_provider
 
+from core.exceptions import UnknownModel
+
 
 class ProviderRouter:
     """
@@ -15,7 +17,7 @@ class ProviderRouter:
         config = MODEL_REGISTRY.get(request.model)
 
         if config is None:
-            raise ValueError(f"Unknown model '{request.model}'")
+            raise UnknownModel(f"Unknown model '{request.model}'")
 
         provider: ModelProvider = get_provider(config.provider)
 

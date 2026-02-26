@@ -5,6 +5,8 @@ from .anthropic_provider import AnthropicProvider
 from .openai_compatible_provider import OpenAICompatibleProvider
 from infra.config.models import MODEL_REGISTRY, ModelConfig
 
+from core.exceptions import UnknownProvider
+
 __all__ = ["MODEL_REGISTRY", "ModelConfig"]
 
 _PROVIDER_REGISTRY = {
@@ -18,6 +20,6 @@ def get_provider(name: str) -> ModelProvider:
     provider_cls = _PROVIDER_REGISTRY.get(name)
 
     if provider_cls is None:
-        raise ValueError(f"Unknown provider '{name}'")
+        raise UnknownProvider(f"unknown provider '{name}'")
 
     return provider_cls()
