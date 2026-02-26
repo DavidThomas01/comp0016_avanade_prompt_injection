@@ -94,11 +94,17 @@ class TestService():
             raise NotFoundError("test not found")
             
         return test
-            
         
     
     def list_all(self, db: Session) -> List[Test]:
         return self.repo.list_all(db)
+    
+    
+    def delete(self, db: Session, id: str) -> Test:
+        test = self.repo.get_by_id(db, id)
+        if not test:
+            raise NotFoundError(f"test not found: {id}")
+        return self.repo.delete_by_id(db, id)
             
             
     async def run(self, db: Session, id: str, message: Message) -> TestResult:
