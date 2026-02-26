@@ -154,6 +154,14 @@ def list_tests(db: Session = Depends(get_db), test_service: TestService = Depend
     return test_service.list_all(db)
 
 
+@router.delete("/{test_id}")
+def delete_test(test_id: str, db: Session = Depends(get_db), test_service: TestService = Depends(get_test_service)):
+    try:
+        return test_service.delete(db, test_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.post("/{test_id}/run", response_model=RunTestReponse)
 async def run_test(test_id: str, request: RunTestRequest, db: Session = Depends(get_db), test_service: TestService = Depends(get_test_service)):
     try:
