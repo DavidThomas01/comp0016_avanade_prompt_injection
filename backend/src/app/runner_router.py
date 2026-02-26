@@ -7,11 +7,13 @@ class RunnerRouter:
     """
     Resolves a test to a runner and delegates execution.
 
-    This layer centralizes model → provider routing so that API handlers,
-    runners, and tests never need to know provider details.
+    This layer centralizes test -> runner routing so that API handlers,
+    and test services never need to know provider details.
     """
 
     async def run(self, test: Test, message: Optional[Message] = None) -> TestResult:
         runner: TestRunner = resolve_runner(test.runner.type)
 
-        return await runner.run(test, message)
+        result = await runner.run(test, message)
+        
+        return result
