@@ -1,12 +1,16 @@
 # backend/src/api/server.py
 from __future__ import annotations
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes.suites import router as suites_router
 from api.routes.tests import router as tests_router
 from api.routes.runs import router as runs_router
+from api.routes.chat import router as chat_router
 
 
 def create_app() -> FastAPI:
@@ -24,6 +28,7 @@ def create_app() -> FastAPI:
     app.include_router(suites_router)
     app.include_router(tests_router)
     app.include_router(runs_router)
+    app.include_router(chat_router)
 
     return app
 

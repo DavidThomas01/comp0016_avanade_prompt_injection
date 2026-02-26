@@ -16,10 +16,10 @@ export function ChatWidget() {
     >
       <div className="relative">
         <div
-          className={`absolute bottom-16 right-0 transition-all duration-200 ${
+          className={`absolute bottom-16 right-0 transition-all duration-300 ease-out origin-bottom-right ${
             open
-              ? 'opacity-100 translate-y-0'
-              : 'opacity-0 pointer-events-none translate-y-2'
+              ? 'opacity-100 scale-100 translate-y-0'
+              : 'opacity-0 scale-95 pointer-events-none translate-y-2'
           }`}
         >
           <ChatPanel variant="compact" onClose={() => setOpen(false)} />
@@ -27,8 +27,10 @@ export function ChatWidget() {
 
         <button
           onClick={() => setOpen(prev => !prev)}
-          className={`flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-colors ${
-            open ? 'bg-gray-900 text-white' : 'bg-orange-500 text-white'
+          className={`flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-200 ${
+            open
+              ? 'bg-gray-900 text-white hover:bg-gray-800 rotate-0'
+              : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-105'
           }`}
           aria-label={open ? 'Close assistant' : 'Open assistant'}
         >

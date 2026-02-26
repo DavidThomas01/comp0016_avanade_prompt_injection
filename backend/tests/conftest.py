@@ -1,3 +1,12 @@
+import pathlib
+import sys
+
+# Ensure backend/src is on sys.path so ``import domain.*`` etc. work
+# regardless of how pytest resolves the ``pythonpath`` ini option.
+_SRC = str(pathlib.Path(__file__).resolve().parent.parent / "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
 from dotenv import load_dotenv
 import pytest
 
