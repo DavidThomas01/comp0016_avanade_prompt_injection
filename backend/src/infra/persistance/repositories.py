@@ -2,8 +2,10 @@ from sqlalchemy.orm import Session
 from dataclasses import asdict
 
 from domain.tests import *
+from domain.providers import Message
 
 from .models import TestModel
+
 
 class TestRepository:
 
@@ -56,9 +58,27 @@ class TestRepository:
         return Test(
             id=row.id,
             name=row.name,
-            model=ModelSpec(**row.model),
-            environment=EnvironmentSpec(**row.environment)
-            if row.environment else None,
-            runner=RunnerSpec(**row.runner),
+            model=self._model_to_domain(row.model),
+            environment=self._environment_to_domain(row.environment) if row.environment else None,
+            runner=self._runner_to_domain(row.runner),
             created_at=row.created_at,
         )
+        
+    
+    def _model_to_domain(self, model: dict) -> ModelSpec:
+        return ModelSpec(**model)
+    
+    
+    def _environment_to_domain(self, environment: dict) -> EnvironmentSpec:
+        return EnvironmentSpec(**environment)
+    
+    
+    def _runner_to_domain(self, runner: dict) -> RunnerSpec:
+        context = None
+        if runner.get("context"):
+             context = [Message(**m) for m in runner["context"]]
+        return RunnerSpec(
+            type=RunnerType(runner["type"]),
+            context=context
+        )
+            
