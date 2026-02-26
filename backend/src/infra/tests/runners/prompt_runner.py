@@ -24,16 +24,15 @@ class PromptRunner(TestRunner):
         if test.model.type == ModelType.PLATFORM:
             model_response, mitigation_analysis = await self._run_test_on_platform_model(test, prompt)
         
-            
         elif test.model.type == ModelType.EXTERNAL:
             model_response = await self._run_test_on_external_model(test, prompt)
             
         finished_at = datetime.now()
             
         analysis = await self.analyser.analyse(model_response, prompt, test.runner.context, mitigation_analysis)
-        
+                    
         return TestResult(
-            output = model_response,
+            output = model_response.text,
             analysis = analysis,
             started_at = started_at,
             finished_at = finished_at
