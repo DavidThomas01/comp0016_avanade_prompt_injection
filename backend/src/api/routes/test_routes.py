@@ -48,7 +48,7 @@ class EnvironmentSpecSchema(BaseModel):
 
 class RunnerSpecSchema(BaseModel):
     type: RunnerType
-    context: Optional[List[Message]] = None
+    context: List[Message] = Field(default_factory=list)
     
     def to_dto(self) -> RunnerSpecInput:
         return RunnerSpecInput(

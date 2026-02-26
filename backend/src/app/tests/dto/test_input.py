@@ -22,7 +22,7 @@ class EnvironmentSpecInput:
 @dataclass
 class RunnerSpecInput:
     type: RunnerType
-    context: Optional[List[Message]] = None
+    context: List[Message] = field(default_factory=list)
 
 
 @dataclass

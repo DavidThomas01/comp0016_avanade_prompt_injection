@@ -82,7 +82,7 @@ class TestRepository:
     
     
     def _runner_to_domain(self, runner: dict) -> RunnerSpec:
-        context = None
+        context = []
         if runner.get("context"):
              context = [Message(**m) for m in runner["context"]]
         return RunnerSpec(

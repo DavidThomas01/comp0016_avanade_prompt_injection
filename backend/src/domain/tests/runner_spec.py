@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, List
 from domain.providers.base_provider import Message
@@ -14,7 +14,7 @@ class RunnerType(str, Enum):
 class RunnerSpec:
     type: RunnerType
 
-    context: Optional[List[Message]] = None
+    context: List[Message] = field(default_factory=list)
     
     
     @classmethod
@@ -28,7 +28,7 @@ class RunnerSpec:
     @classmethod
     def create_framework(cls):
         return cls(
-            type=RunnerType.FRAMEWORK,
+            type=RunnerType.FRAMEWORK
         )
         
 
