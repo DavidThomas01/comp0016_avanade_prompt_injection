@@ -1,9 +1,12 @@
 from infra.config.mitigations import MITIGATION_REGISTRY
+from typing import Optional, List
+
+from core.exceptions import UnknownMitigation
 
 class PromptCompiler:
 
     @staticmethod
-    def compile(mitigations, system_prompt) -> str:
+    def compile(mitigations: List[str], system_prompt: Optional[str] = None) -> str:
         
         if mitigations:
             
@@ -16,7 +19,7 @@ class PromptCompiler:
                 mitigation_config = MITIGATION_REGISTRY.get(mitigation)
                 
                 if not mitigation_config:
-                    raise ValueError("mitigation is not defined in the platform")
+                    raise UnknownMitigation("mitigation is not defined in the platform")
                 
                 if mitigation_config.layer == "prompt":
                     system_prompt.append("\n" + mitigation_config.prompt_message)
