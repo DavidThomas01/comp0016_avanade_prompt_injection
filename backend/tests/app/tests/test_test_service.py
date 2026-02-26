@@ -8,6 +8,8 @@ from unittest.mock import Mock
 import pytest
 from core.exceptions import NotFoundError, InvalidModelConfiguration
 
+from datetime import datetime
+
 @pytest.fixture
 def ctx():
     mock_repo = Mock()
@@ -18,7 +20,11 @@ def ctx():
     mock_repo.update.side_effect = lambda db, test: test
     mock_repo.list_all.return_value = [generate_test("test_1"), generate_test("test_2"), generate_test("test_3")]
     
-    service = TestService(mock_repo)
+    mock_runner = Mock()
+    
+    mock_runner.run.return_value = TestResult(output="Hello", analysis="Pass", started_at=datetime.now(), finished_at=datetime.now())
+    
+    service = TestService(mock_repo, mock_runner)
 
     class Ctx:
         pass
