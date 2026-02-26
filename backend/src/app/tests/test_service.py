@@ -6,6 +6,7 @@ from infra.config.models import MODEL_REGISTRY
 from infra.config.mitigations import MITIGATION_REGISTRY
 from infra.tests.runners import *
 from infra.persistance.repositories import TestRepository
+from app.runner_router import RunnerRouter
 
 from .dto import *
 
@@ -16,8 +17,9 @@ from core.exceptions import *
 
 class TestService():
     
-    def __init__(self, repo: TestRepository):
+    def __init__(self, repo: TestRepository, runner_router: RunnerRouter):
         self.repo = repo
+        self.runner_router = runner_router
         
     
     def create(self, db: Session, request: CreateTestInput) -> Test:
@@ -115,23 +117,13 @@ class TestService():
         
         if not test:
             raise NotFoundError("test not found")
-        
-        runner = self._resolve_runner(test.runner.type)
-        
-        result = await runner.run(test, message if message else None)
+                
+        result = self.runner_router.run(test, message)
         
         if test.runner.type == RunnerType.PROMPT:
             self._update_context_with_response(db, test, message, result.output)
         
         return result 
-    
-    
-    def _resolve_runner(self, runner_type: RunnerType) -> TestRunner:
-        if runner_type == RunnerType.PROMPT:
-            return PromptRunner()
-        if runner_type == RunnerType.FRAMEWORK:
-            return FrameworkRunner()
-        raise InvalidModelConfiguration(f"unsupported runner type: {runner_type}")
     
     
     def _update_context_with_response(self, db: Session, test: Test, message: Message, response: str):
