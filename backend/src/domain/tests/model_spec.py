@@ -22,7 +22,9 @@ class ModelSpec:
     
     
     @classmethod
-    def create_platform(cls, model_id: str):
+    def create_platform(cls, model_id: Optional[str] = None):
+        if not model_id:
+            raise InvalidModelConfiguration("platform model spec missing model id")
         return cls(
             type=ModelType.PLATFORM,
             model_id=model_id
@@ -30,7 +32,9 @@ class ModelSpec:
         
         
     @classmethod
-    def create_external(cls, endpoint: str, key, str):
+    def create_external(cls, endpoint: Optional[str] = None, key: Optional[str] = None):
+        if not endpoint or not key:
+            raise InvalidModelConfiguration("external model spec missing endpoint or key")
         return cls(
             type=ModelType.EXTERNAL,
             endpoint=endpoint,
