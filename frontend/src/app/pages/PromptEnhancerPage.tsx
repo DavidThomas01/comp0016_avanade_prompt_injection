@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Send, Copy, RefreshCw, Loader } from 'lucide-react';
+import { Send, Copy, RefreshCw, Loader, Sparkles, CheckCircle2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { mitigations } from '../data/mitigations';
 import { enhancePrompt, PromptEnhancementResponse } from '../api/promptEnhancerClient';
 
@@ -9,12 +9,12 @@ export function PromptEnhancerPage() {
   const [enhancementResult, setEnhancementResult] = useState<PromptEnhancementResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedCount = selectedMitigations.length;
+  const mitigationCards = useMemo(() => mitigations, []);
   
   const toggleMitigation = (id: string) => {
     setSelectedMitigations(prev =>
-      prev.includes(id) 
-        ? prev.filter(m => m !== id)
-        : [...prev, id]
+      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
     );
   };
   
@@ -46,147 +46,175 @@ export function PromptEnhancerPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
-  
+
   const resetForm = () => {
     setSystemPrompt('');
     setEnhancementResult(null);
     setSelectedMitigations([]);
     setError(null);
   };
-  
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="min-h-[calc(100vh-64px)]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
         <div className="mb-6">
-          <h1 className="text-3xl mb-2">Prompt Enhancer</h1>
-          <p className="text-gray-700">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-gray-700">
+            <Sparkles className="h-3.5 w-3.5 text-orange-600" />
+            Prompt hardening helper
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold">
+            <span className="gradient-text">Prompt Enhancer</span>
+          </h1>
+          <p className="text-gray-700 mt-2">
             Enhance your system prompts with security mitigations to protect against prompt injection attacks.
             Your prompt will be restructured for clarity, mitigations will be prepended, and the result will be verified.
           </p>
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Panel - Mitigations */}
-          <div className="bg-white border border-gray-200 rounded">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="font-semibold">Available Mitigations</h2>
-              <p className="text-xs text-gray-500 mt-1">Select mitigations to apply to your prompt</p>
-            </div>
-            
-            <div className="p-4 space-y-3">
-              {mitigations.map((mitigation) => (
-                <div
-                  key={mitigation.id}
-                  onClick={() => toggleMitigation(mitigation.id)}
-                  className={`p-3 border-2 rounded cursor-pointer transition-all ${
-                    selectedMitigations.includes(mitigation.id)
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                      selectedMitigations.includes(mitigation.id)
-                        ? 'border-orange-500 bg-orange-500'
-                        : 'border-gray-300 bg-white'
-                    }`}>
-                      {selectedMitigations.includes(mitigation.id) && (
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-sm">{mitigation.name}</div>
-                      <div className="text-xs text-gray-500 mt-1">{mitigation.description}</div>
-                    </div>
-                  </div>
+          {/* Left: Mitigations */}
+          <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
+            <div className="p-4 border-b border-white/60 bg-white/40">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">Available Mitigations</h2>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Select mitigations to include in your prompt
+                  </p>
                 </div>
-              ))}
-              
-              <div className="mt-6 p-3 bg-gray-100 rounded">
-                <div className="text-sm font-medium mb-2">Selected Mitigations</div>
-                <div className="text-2xl font-bold text-orange-500">
-                  {selectedMitigations.length} / {mitigations.length}
+                <div className="text-xs text-gray-700 px-3 py-1 rounded-full bg-white/60 border border-white/60">
+                  {selectedCount} selected
                 </div>
               </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              {mitigationCards.map((mitigation) => {
+                const active = selectedMitigations.includes(mitigation.id);
+                return (
+                  <button
+                    key={mitigation.id}
+                    type="button"
+                    onClick={() => toggleMitigation(mitigation.id)}
+                    className={`w-full text-left rounded-2xl p-4 border transition-all focus-ring ${
+                      active
+                        ? 'bg-orange-500/10 border-orange-500/30'
+                        : 'bg-white/40 border-white/60 hover:bg-white/70 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm text-gray-900 truncate">
+                          {mitigation.name}
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1 leading-relaxed line-clamp-2">
+                          {mitigation.description}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {active ? (
+                          <CheckCircle2 className="h-5 w-5 text-orange-600" />
+                        ) : (
+                          <div className="h-5 w-5 rounded-full border border-gray-900/15 bg-white/60" />
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
-          
-          {/* Middle Panel - System Prompt Input */}
-          <div className="bg-white border border-gray-200 rounded">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="font-semibold">System Prompt</h2>
-              <p className="text-xs text-gray-500 mt-1">Enter your base system prompt</p>
+
+          {/* Middle: Input */}
+          <div className="glass-strong rounded-3xl border border-white/60 p-6">
+            <h2 className="text-lg font-semibold mb-2">Your System Prompt</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Paste your system prompt here, then generate an enhanced version with the selected mitigations.
+            </p>
+
+            <textarea
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="Enter your system prompt..."
+              className="w-full h-[320px] resize-none rounded-2xl border border-white/60 bg-white/60 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus-ring"
+              disabled={loading}
+            />
+
+            <div className="flex flex-wrap gap-2 mt-4">
+              <button
+                type="button"
+                onClick={generateEnhancedPrompt}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-900 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all focus-ring"
+              >
+                {loading ? (
+                  <>
+                    <Loader className="h-4 w-4 animate-spin" />
+                    Enhancing...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Generate
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass hover:bg-white/80 transition-all focus-ring"
+              >
+                <RefreshCw className="h-4 w-4 text-gray-700" />
+                Reset
+              </button>
             </div>
             
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Enter your system prompt:</label>
-                <textarea
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="You are a helpful AI assistant that provides accurate and safe responses..."
-                  rows={12}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono resize-none"
-                  disabled={loading}
-                />
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                <div className="text-xs font-medium text-red-900 mb-1">⚠️ Error</div>
+                <p className="text-xs text-red-800">{error}</p>
               </div>
-              
-              <div className="space-y-2">
-                <button
-                  onClick={generateEnhancedPrompt}
-                  disabled={loading}
-                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white py-2 rounded flex items-center justify-center space-x-2 transition-colors"
-                >
-                  {loading ? (
-                    <>
-                      <Loader className="w-4 h-4 animate-spin" />
-                      <span>Enhancing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      <span>Enhance Prompt</span>
-                    </>
-                  )}
-                </button>
-                
-                <button
-                  onClick={resetForm}
-                  disabled={loading}
-                  className="w-full bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 text-gray-700 py-2 rounded flex items-center justify-center space-x-2 transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  <span>Reset</span>
-                </button>
-              </div>
+            )}
 
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded">
-                  <div className="text-xs font-medium text-red-900 mb-1">⚠️ Error</div>
-                  <p className="text-xs text-red-800">{error}</p>
-                </div>
-              )}
-              
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded">
-                <div className="text-xs font-medium text-blue-900 mb-1">💡 How it works</div>
-                <p className="text-xs text-blue-800">
-                  1. Your prompt is restructured for clarity<br/>
-                  2. Security mitigations are prepended<br/>
-                  3. The result is verified for quality
-                </p>
-              </div>
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+              <div className="text-xs font-medium text-blue-900 mb-1">💡 How it works</div>
+              <p className="text-xs text-blue-800">
+                1. Your prompt is restructured for clarity<br />
+                2. Security mitigations are prepended<br />
+                3. The result is verified for quality
+              </p>
             </div>
           </div>
           
           {/* Right Panel - All Three Outputs */}
-          <div className="bg-white border border-gray-200 rounded">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="font-semibold">Results</h2>
-              <p className="text-xs text-gray-500 mt-1">Original → Improved → Enhanced</p>
+          <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
+            <div className="p-4 border-b border-white/60 bg-white/40">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Results</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Original → Improved → Enhanced
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => enhancementResult && copyToClipboard(enhancementResult.enhancedPrompt)}
+                  disabled={!enhancementResult}
+                  className={`inline-flex items-center gap-2 text-xs px-3 py-2 rounded-full border transition-all focus-ring ${
+                    enhancementResult
+                      ? 'bg-white/60 border-white/60 text-gray-800 hover:bg-white/80'
+                      : 'bg-white/40 border-white/60 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy
+                </button>
+              </div>
             </div>
-            
+
             <div className="p-4 space-y-4 max-h-[800px] overflow-y-auto">
               {enhancementResult ? (
                 <>
