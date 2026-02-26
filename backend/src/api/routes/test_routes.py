@@ -16,8 +16,7 @@ from core.exceptions import *
 from app.tests.dto import *
 
 
-router = APIRouter(prefix="/tests", tags=["tests"])
-
+router = APIRouter(prefix="/api/tests", tags=["tests"])
 
 class ModelSpecSchema(BaseModel):
     type: ModelType
@@ -95,16 +94,18 @@ class TestAnalysisSchema(BaseModel):
 
     
 class RunTestRequest(BaseModel):
-    prompt: str
+    role: str
+    content: str
     
-    def to_dto(self) -> RunTestInput:
-        return RunTestInput(
-            prompt=self.prompt
+    def to_dto(self) -> Message:
+        return Message(
+            role=self.role,
+            content=self.content
         )
     
 
 class RunTestReponse(BaseModel):
-    output: dict[str, Any]
+    output: str
     analysis: TestAnalysisSchema
     started_at: datetime
     finished_at: datetime
@@ -154,9 +155,10 @@ def list_tests(db: Session = Depends(get_db), test_service: TestService = Depend
 
 
 @router.post("/{test_id}/run", response_model=RunTestReponse)
-def run_test(test_id: str, request: RunTestRequest, db: Session = Depends(get_db), test_service: TestService = Depends(get_test_service)):
+async def run_test(test_id: str, request: RunTestRequest, db: Session = Depends(get_db), test_service: TestService = Depends(get_test_service)):
     try:
-        return test_service.run(db, test_id, request.to_dto())
+        result = await test_service.run(db, test_id, request.to_dto())
+        return result
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except InvalidModelConfiguration as e:
