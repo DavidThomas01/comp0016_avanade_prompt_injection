@@ -22,7 +22,7 @@ class ModelSpec:
     
     
     @classmethod
-    def create_from_registry(cls, model_id: str):
+    def create_platform(cls, model_id: str):
         return cls(
             type=ModelType.PLATFORM,
             model_id=model_id
@@ -30,11 +30,11 @@ class ModelSpec:
         
         
     @classmethod
-    def create_from_external(cls, model_config: dict):
+    def create_external(cls, endpoint: str, key, str):
         return cls(
             type=ModelType.EXTERNAL,
-            endpoint=model_config["endpoint"],
-            key=model_config["key"]
+            endpoint=endpoint,
+            key=key
         )
 
 

@@ -19,7 +19,7 @@ class EnvironmentSpec:
     
     
     @classmethod
-    def create_from_mitigations(cls, mitigations: dict, system_prompt: str):
+    def create_from_mitigations(cls, mitigations: List[str], system_prompt: str):
         return cls(
             type=EnvType.MITIGATION,
             mitigations=mitigations,
@@ -28,7 +28,7 @@ class EnvironmentSpec:
         
         
     @classmethod
-    def create_from_prompt(cls, system_prompt: str):
+    def create_from_system_prompt(cls, system_prompt: str):
         return cls(
             type=EnvType.CUSTOM,
             system_prompt=system_prompt

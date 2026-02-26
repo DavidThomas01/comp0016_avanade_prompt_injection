@@ -18,19 +18,17 @@ class RunnerSpec:
     
     
     @classmethod
-    def create_default(cls, runner_type):
-        if runner_type == RunnerType.PROMPT:
-            return cls(type=runner_type, context=[])
+    def create_prompt(cls, context: Optional[List[Message]] = None):
         return cls(
-            type=runner_type
+            type=RunnerType.PROMPT,
+            context=context or []
         )
     
     
     @classmethod
-    def create_prompt(cls, context):
+    def create_framework(cls):
         return cls(
-            type=RunnerType.PROMPT,
-            context=context if context is not None else []
+            type=RunnerType.FRAMEWORK,
         )
         
 

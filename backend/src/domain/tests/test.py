@@ -4,8 +4,8 @@ from typing import Optional
 import uuid
 
 from .model_spec import ModelSpec, ModelType
-from .environment_spec import EnvironmentSpec, EnvType
-from .runner_spec import RunnerSpec
+from .environment_spec import EnvironmentSpec
+from .runner_spec import RunnerSpec, RunnerType
 
 from core.exceptions import InvalidModelConfiguration
 
@@ -80,7 +80,7 @@ class Test:
         model.validate()
         runner.validate()
 
-        if model.type == ModelType.EXTERNAL or environment.type == EnvType.FRAMEWORK:
+        if model.type == ModelType.EXTERNAL or runner.type == RunnerType.FRAMEWORK:
             if environment is not None:
                 raise InvalidModelConfiguration("external model cannot include environment")
             return
