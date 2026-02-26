@@ -1,3 +1,4 @@
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 from dataclasses import asdict
 
@@ -52,6 +53,13 @@ class TestRepository:
     def list_all(self, db: Session) -> list[Test]:
         rows = db.query(TestModel).all()
         return [self._to_domain(row) for row in rows]
+    
+    
+    def delete_by_id(self, db: Session, test_id: str):
+        stmt = delete(TestModel).where(TestModel.id == test_id)
+        result = db.execute(stmt)
+        db.commit()
+        return result.rowcount > 0
 
 
     def _to_domain(self, row: TestModel) -> Test:
