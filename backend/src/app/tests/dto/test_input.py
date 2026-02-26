@@ -39,8 +39,3 @@ class UpdateTestInput:
     model: Optional[ModelSpecInput] = None
     environment: Optional[EnvironmentSpecInput] = None
     runner: Optional[RunnerSpecInput] = None
-    
-    
-@dataclass
-class RunTestInput:
-    prompt: str
