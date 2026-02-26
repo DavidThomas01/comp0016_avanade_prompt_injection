@@ -55,7 +55,7 @@ class Test:
         Old test remains unchanged.
         """
         new_model = model or self.model
-        new_env = environment if environment is not None else self.environment
+        new_env = environment if environment is not None or new_model.type == ModelType.EXTERNAL else self.environment
         new_runner = runner or self.runner
 
         Test._validate(model=new_model, environment=new_env, runner=new_runner)
@@ -80,9 +80,9 @@ class Test:
         model.validate()
         runner.validate()
 
-        if model.type == ModelType.EXTERNAL or runner.type == RunnerType.FRAMEWORK:
+        if model.type == ModelType.EXTERNAL:
             if environment is not None:
-                raise InvalidModelConfiguration("external model cannot include environment")
+                raise InvalidModelConfiguration(f"external model cannot include environment")
             return
 
         if environment is None:
