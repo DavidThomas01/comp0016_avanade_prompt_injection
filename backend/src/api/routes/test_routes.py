@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from datetime import datetime
-from typing import Optional, List, Any
+
 
 from infra.persistance.db import SessionLocal
 
@@ -15,100 +14,10 @@ from core.exceptions import *
 
 from app.tests.dto import *
 
+from api.schemas.tests import *
+
 
 router = APIRouter(prefix="/api/tests", tags=["tests"])
-
-class ModelSpecSchema(BaseModel):
-    type: ModelType
-    model_id: Optional[str] = None
-    endpoint: Optional[str] = None
-    key: Optional[str] = None
-    
-    def to_dto(self) -> ModelSpecInput:
-        return ModelSpecInput(
-            type=self.type,
-            model_id=self.model_id,
-            endpoint=self.endpoint,
-            key=self.key,
-        )
-
-
-class EnvironmentSpecSchema(BaseModel):
-    type: EnvType
-    system_prompt: str
-    mitigations: List[str] = Field(default_factory=list)
-    
-    def to_dto(self) -> EnvironmentSpecInput:
-        return EnvironmentSpecInput(
-            type=self.type,
-            system_prompt=self.system_prompt,
-            mitigations=list(self.mitigations)
-        )
-
-
-class RunnerSpecSchema(BaseModel):
-    type: RunnerType
-    context: List[Message] = Field(default_factory=list)
-    
-    def to_dto(self) -> RunnerSpecInput:
-        return RunnerSpecInput(
-            type=self.type,
-            context=list(self.context) if self.context else None
-        )
-        
-
-class CreateTestRequest(BaseModel):
-    name: str
-    model: ModelSpecSchema
-    environment: Optional[EnvironmentSpecSchema] = None
-    runner: RunnerSpecSchema
-    
-    def to_dto(self) -> CreateTestInput:
-        return CreateTestInput(
-            name=self.name,
-            model=self.model.to_dto(),
-            environment=self.environment.to_dto() if self.environment else None,
-            runner=self.runner.to_dto(),
-        )
-    
-    
-class UpdateTestRequest(BaseModel):
-    name: Optional[str] = None
-    model: Optional[ModelSpecSchema] = None
-    environment: Optional[EnvironmentSpecSchema] = None
-    runner: Optional[RunnerSpecSchema] = None
-    
-    def to_dto(self) -> UpdateTestInput:
-        return UpdateTestInput(
-            name=self.name,
-            model=self.model.to_dto() if self.model else None,
-            environment=self.environment.to_dto() if self.environment else None,
-            runner=self.runner.to_dto() if self.runner else None,
-        )
-    
-
-class TestAnalysisSchema(BaseModel):
-    flagged: bool
-    score: float
-    reason: str
-
-    
-class RunTestRequest(BaseModel):
-    role: str
-    content: str
-    
-    def to_dto(self) -> Message:
-        return Message(
-            role=self.role,
-            content=self.content
-        )
-    
-
-class RunTestReponse(BaseModel):
-    output: str
-    analysis: TestAnalysisSchema
-    started_at: datetime
-    finished_at: datetime
     
 
 def get_test_service(request: Request):
