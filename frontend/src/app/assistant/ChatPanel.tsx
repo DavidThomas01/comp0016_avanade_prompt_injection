@@ -1,29 +1,38 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, MessageSquare, Send, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import {
+  ExternalLink,
+  MessageSquare,
+  Send,
+  X,
+  Loader2,
+  Trash2,
+  StopCircle,
+} from 'lucide-react';
 
-import { sendChatMessage } from './chatClient';
+import { streamChatMessage } from './chatClient';
 import { loadThread, saveThread } from './storage';
+import { MarkdownRenderer } from './MarkdownRenderer';
 import { ChatMessage, ChatRole } from './types';
-import { useRotatingText } from '../hooks/useRotatingText';
-
-const CHAT_PROGRESS_MESSAGES = [
-  'Searching knowledge base…',
-  'Analyzing your question…',
-  'Composing response…',
-  'Almost there…',
-];
 
 type ChatPanelProps = {
   variant: 'compact' | 'full';
   onClose?: () => void;
 };
 
+const SAMPLE_QUERIES = [
+  'What is direct prompt injection?',
+  'How do obfuscation attacks bypass filters?',
+  'What mitigations exist for tool-use injection?',
+  'Explain indirect prompt injection in RAG systems',
+];
+
 const INITIAL_MESSAGE: ChatMessage = {
   id: 'assistant-welcome',
   role: 'assistant',
   content:
-    'Ask me anything about prompt-injection vulnerabilities, mitigations, or testing scenarios. I’ll answer from the platform knowledge base.',
+    'Hi! I can help you understand prompt-injection vulnerabilities, mitigations, and testing strategies. Ask me anything or try one of the suggestions below.',
   createdAt: Date.now(),
+  suggestions: SAMPLE_QUERIES,
 };
 
 function createMessage(role: ChatRole, content: string): ChatMessage {
@@ -44,6 +53,8 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const streamedTextRef = useRef('');
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     saveThread(messages);
@@ -56,55 +67,95 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
     });
   }, [messages, isSending]);
 
-  // Auto-resize textarea based on content
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
-      const maxHeight = variant === 'compact' ? 120 : 200;
+      const maxHeight = variant === 'compact' ? 100 : 160;
       textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
     }
   }, [input, variant]);
-
-  const progressText = useRotatingText(CHAT_PROGRESS_MESSAGES, 2500, isSending);
 
   const canSend = input.trim().length > 0 && !isSending;
 
   const messageCount = useMemo(
     () => messages.filter(m => m.role === 'user').length,
-    [messages]
+    [messages],
   );
 
-  const handleSend = async () => {
+  const handleClearChat = useCallback(() => {
+    abortRef.current?.abort();
+    setMessages([INITIAL_MESSAGE]);
+    setInput('');
+    setIsSending(false);
+    streamedTextRef.current = '';
+  }, []);
+
+  const handleAbort = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  const handleSend = useCallback(async () => {
     if (!canSend) return;
     const trimmed = input.trim();
     setInput('');
 
-    // Reset textarea height
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     const userMessage = createMessage('user', trimmed);
-    setMessages(prev => [...prev, userMessage]);
+    const assistantId = `assistant-${crypto.randomUUID()}`;
+    const placeholder: ChatMessage = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      createdAt: Date.now(),
+    };
+
+    setMessages(prev => [...prev, userMessage, placeholder]);
     setIsSending(true);
+    streamedTextRef.current = '';
+
+    const abort = new AbortController();
+    abortRef.current = abort;
+
+    const history = [...messages, userMessage]
+      .filter(m => m.id !== 'assistant-welcome')
+      .map(m => ({ role: m.role, content: m.content }));
 
     try {
-      const reply = await sendChatMessage(trimmed);
-      const assistantMessage: ChatMessage = {
-        ...createMessage('assistant', reply.text),
-        related: {
-          confidence: reply.confidence,
-          vulnerabilities: reply.relatedVulnerabilities,
-          mitigations: reply.relatedMitigations,
-          suggestions: reply.suggestions,
+      await streamChatMessage(
+        trimmed,
+        history,
+        {
+          onDelta: data => {
+            streamedTextRef.current += data.text;
+            const currentText = streamedTextRef.current;
+            setMessages(prev =>
+              prev.map(m =>
+                m.id === assistantId ? { ...m, content: currentText } : m,
+              ),
+            );
+          },
         },
-      };
-      setMessages(prev => [...prev, assistantMessage]);
+        abort.signal,
+      );
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (!streamedTextRef.current) {
+        streamedTextRef.current = 'Sorry, couldn\u2019t reach the server. Please try again.';
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === assistantId
+              ? { ...m, content: streamedTextRef.current }
+              : m,
+          ),
+        );
+      }
     } finally {
       setIsSending(false);
+      abortRef.current = null;
     }
-  };
+  }, [canSend, input, messages]);
 
   const handleKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = e => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -113,34 +164,38 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
     }
   };
 
+  const handleSuggestionClick = useCallback((suggestion: string) => {
+    setInput(suggestion);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
+
   const openFullView = () => {
     window.open('/security-knowledge-assistant', '_blank', 'noopener,noreferrer');
   };
 
   return (
     <div
-      className={`flex flex-col glass-strong border border-white/60 rounded-3xl shadow-lg overflow-hidden ${
-        variant === 'compact' ? 'w-[360px] sm:w-[390px]' : 'w-full'
+      className={`flex flex-col glass-strong rounded-2xl shadow-lg overflow-hidden ${
+        variant === 'compact' ? 'w-[360px] sm:w-[400px]' : 'w-full'
       }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/60 bg-white/40">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/50">
+        <div className="flex items-center gap-2.5">
           <div
-            className="h-9 w-9 rounded-2xl flex items-center justify-center text-white shadow-sm"
+            className="h-8 w-8 rounded-xl flex items-center justify-center text-white shadow-sm"
             style={{
               background:
                 'linear-gradient(135deg, rgba(255,88,0,1) 0%, rgba(164,0,90,1) 100%)',
             }}
           >
-            <MessageSquare className="h-4 w-4" />
+            <MessageSquare className="h-3.5 w-3.5" />
           </div>
-
           <div>
             <div className="text-sm font-semibold text-gray-900">
               Security Knowledge Assistant
             </div>
-            <div className="text-xs text-gray-600">
+            <div className="text-[11px] text-gray-500">
               {messageCount > 0
                 ? `${messageCount} question${messageCount === 1 ? '' : 's'} asked`
                 : 'Ask a question to get started'}
@@ -148,22 +203,33 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {variant === 'compact' && (
+        <div className="flex items-center gap-1">
+          {messages.length > 1 && (
             <button
               type="button"
-              onClick={openFullView}
-              className="text-xs text-gray-700 hover:text-gray-900 inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-white/60 transition-colors focus-ring"
+              onClick={handleClearChat}
+              className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-white/60 transition-colors"
+              aria-label="Clear chat"
+              title="New chat"
             >
-              Expand
-              <ExternalLink className="h-3 w-3" />
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
           {variant === 'compact' && (
             <button
               type="button"
+              onClick={openFullView}
+              className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-white/60 transition-colors"
+              title="Open in full view"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {variant === 'compact' && onClose && (
+            <button
+              type="button"
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-800 rounded-full p-2 hover:bg-white/60 transition-colors focus-ring"
+              className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-white/60 transition-colors"
               aria-label="Close assistant"
             >
               <X className="h-4 w-4" />
@@ -176,9 +242,9 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
       <div className="flex-1 min-h-0">
         <div
           ref={scrollRef}
-          className={`space-y-4 overflow-y-auto px-4 ${
+          className={`space-y-2.5 overflow-y-auto px-3.5 ${
             variant === 'compact' ? 'h-[380px]' : 'h-[calc(100vh-400px)]'
-          } py-4`}
+          } py-3`}
         >
           {messages.map(message => {
             const isUser = message.role === 'user';
@@ -188,10 +254,10 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
                 className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-3xl px-4 py-3 text-sm border ${
+                  className={`max-w-[88%] rounded-2xl text-[13px] leading-relaxed ${
                     isUser
-                      ? 'text-white border-white/10'
-                      : 'text-gray-800 bg-white/70 border-white/60'
+                      ? 'text-white px-3.5 py-2'
+                      : 'text-gray-800 px-3.5 py-2.5 glass-chat-reply'
                   }`}
                   style={
                     isUser
@@ -202,83 +268,45 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
                       : undefined
                   }
                 >
-                  <div className="leading-relaxed whitespace-pre-wrap">{message.content}</div>
-
-                  {message.role === 'assistant' && message.related && (
-                    <div className="mt-3 space-y-3 text-xs text-gray-700">
-                      {message.related.vulnerabilities?.length ? (
-                        <div className="space-y-2">
-                          <div className="font-semibold text-gray-900">
-                            Relevant vulnerabilities
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {message.related.vulnerabilities.map(vulnerability => (
-                              <a
-                                key={vulnerability.id}
-                                href={`/vulnerability/${vulnerability.id}`}
-                                className="px-2 py-1 rounded-full bg-gray-900/5 border border-gray-900/10 hover:border-orange-500/30 hover:bg-orange-500/10 transition-colors"
-                              >
-                                {vulnerability.name}
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {message.related.mitigations?.length ? (
-                        <div className="space-y-2">
-                          <div className="font-semibold text-gray-900">
-                            Relevant mitigations
-                          </div>
-                          <div className="space-y-2">
-                            {message.related.mitigations.map(mitigation => (
-                              <div
-                                key={mitigation.id}
-                                className="rounded-2xl bg-white/60 border border-white/60 p-3"
-                              >
-                                <div className="font-semibold text-gray-900">
-                                  {mitigation.name}
-                                </div>
-                                <div className="text-gray-700 mt-1 leading-relaxed">
-                                  {mitigation.description}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {message.related.suggestions?.length ? (
-                        <div className="space-y-2">
-                          <div className="font-semibold text-gray-900">Try asking</div>
-                          <div className="flex flex-wrap gap-2">
-                            {message.related.suggestions.map(suggestion => (
-                              <button
-                                key={suggestion}
-                                type="button"
-                                onClick={() => setInput(suggestion)}
-                                className="rounded-full border border-white/60 bg-white/60 px-2 py-1 text-[11px] text-gray-700 hover:bg-white/80 hover:border-orange-500/30 transition-colors focus-ring"
-                              >
-                                {suggestion}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                  {isUser ? (
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                  ) : (
+                    <div className="prose-sm">
+                      {message.content ? (
+                        <MarkdownRenderer content={message.content} />
                       ) : null}
                     </div>
                   )}
+
+                  {message.suggestions?.length ? (
+                    <div className="mt-2.5 pt-2 border-t border-gray-200/40 space-y-1.5">
+                      <div className="font-semibold text-gray-500 uppercase tracking-wider text-[10px]">
+                        Try asking
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {message.suggestions.map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => handleSuggestionClick(s)}
+                            className="rounded-full border border-white/50 bg-white/40 px-2.5 py-1 text-[11px] text-gray-600 hover:border-orange-300 hover:text-orange-700 hover:bg-orange-50/60 transition-colors cursor-pointer"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );
           })}
 
-          {isSending && (
+          {isSending && streamedTextRef.current === '' && (
             <div className="flex justify-start">
-              <div className="rounded-3xl bg-white/70 border border-white/60 px-4 py-3 text-sm text-gray-700 flex items-center gap-2">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />
-                <span key={progressText} className="animate-fade-in">
-                  {progressText}
-                </span>
+              <div className="rounded-2xl glass-chat-reply px-3.5 py-2 text-[13px] text-gray-500 flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-500" />
+                Thinking&hellip;
               </div>
             </div>
           )}
@@ -286,30 +314,43 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
       </div>
 
       {/* Input */}
-      <div className="border-t border-white/60 px-4 py-3 bg-white/40">
+      <div className="border-t border-white/50 px-3.5 py-2.5">
         <div className="flex items-end gap-2">
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={event => setInput(event.target.value)}
+            onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
             placeholder="Ask about vulnerabilities, mitigations, or testing..."
-            className="flex-1 resize-none rounded-2xl border border-white/60 bg-white/60 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 overflow-y-hidden min-h-[40px] focus-ring"
+            className="flex-1 resize-none rounded-xl border border-white/50 bg-white/50 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:ring-1 focus:ring-orange-200 focus:outline-none overflow-y-hidden min-h-[38px] transition-colors"
+            disabled={isSending}
           />
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={!canSend}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition-all focus-ring ${
-              canSend
-                ? 'bg-orange-600 text-white border-orange-600 hover:shadow-md hover:-translate-y-0.5'
-                : 'bg-white/40 text-gray-400 border-white/60 cursor-not-allowed'
-            }`}
-            aria-label="Send message"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+          {isSending ? (
+            <button
+              type="button"
+              onClick={handleAbort}
+              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-gray-700 text-white hover:bg-gray-800 transition-colors"
+              aria-label="Stop generating"
+              title="Stop"
+            >
+              <StopCircle className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!canSend}
+              className={`inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl transition-all ${
+                canSend
+                  ? 'bg-orange-500 text-white hover:bg-orange-600 hover:shadow-md'
+                  : 'bg-white/40 text-gray-400 cursor-not-allowed'
+              }`}
+              aria-label="Send message"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>

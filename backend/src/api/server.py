@@ -12,6 +12,7 @@ from api.routes.suites import router as suites_router
 from api.routes.tests import router as tests_router
 from api.routes.runs import router as runs_router
 from api.routes.prompt_enhancers import router as prompt_enhancers_router
+from api.routes.chat import router as chat_router
 
 
 def create_app() -> FastAPI:
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(tests_router)
     app.include_router(runs_router)
     app.include_router(prompt_enhancers_router)
+    app.include_router(chat_router)
 
     return app
 
