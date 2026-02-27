@@ -5,7 +5,6 @@ import { ChevronRight, Code2, Copy, ShieldCheck } from 'lucide-react';
 import { mitigations, type CodeLanguage } from '../data/mitigations';
 
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { ScrollArea } from '../components/ui/scroll-area';
 
 const LANG_OPTIONS: Array<{ value: CodeLanguage; label: string }> = [
   { value: 'pseudo', label: 'Pseudo-code' },
@@ -88,57 +87,55 @@ export function MitigationsPage() {
           <h1 className="mt-3 text-3xl font-semibold">
             <span className="gradient-text">Mitigations</span>
           </h1>
-          <p className="text-gray-700 mt-2">
+          <p className="text-gray-700 mt-2 max-w-xl">
             Browse mitigation techniques and view reference implementations in different languages.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: list */}
-          <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
-            <div className="p-4 border-b border-white/60 bg-white/40">
+          <div className="glass-strong rounded-3xl border border-white/60">
+            <div className="px-5 pt-5 pb-4 border-b border-white/60 bg-white/40 rounded-t-3xl">
               <div className="font-semibold">All Mitigations</div>
               <div className="text-xs text-gray-600 mt-1">Click one to view details</div>
             </div>
 
-            <ScrollArea className="h-[520px]">
-              <div className="p-3">
-                {mitigations.map(m => {
-                  const active = m.id === selectedId;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => navigate(`/mitigations/${m.id}`)}
-                      className={`w-full text-left p-4 rounded-2xl border transition-all mb-3 focus-ring ${
-                        active
-                          ? 'border-orange-500/40 bg-orange-500/10'
-                          : 'border-white/60 bg-white/40 hover:bg-white/70 hover:shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-semibold text-sm truncate text-gray-900">{m.name}</div>
-                          <div className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">
-                            {m.description}
-                          </div>
+            <div className="p-4">
+              {mitigations.map(m => {
+                const active = m.id === selectedId;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => navigate(`/mitigations/${m.id}`)}
+                    className={`w-full text-left p-4 rounded-2xl border transition-all mb-3 focus-ring ${
+                      active
+                        ? 'border-orange-500/40 bg-orange-500/10'
+                        : 'border-white/60 bg-white/40 hover:bg-white/70 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm text-gray-900">{m.name}</div>
+                        <div className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">
+                          {m.description}
                         </div>
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${
-                            m.codeBased
-                              ? 'bg-green-500/10 text-green-700 border-green-500/20'
-                              : 'bg-gray-900/5 text-gray-700 border-gray-900/10'
-                          }`}
-                          title={m.codeBased ? 'Code-based' : 'Not code-based'}
-                        >
-                          {m.codeBased ? 'CODE' : 'NON-CODE'}
-                        </span>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </ScrollArea>
+                      <span
+                        className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full border whitespace-nowrap ${
+                          m.codeBased
+                            ? 'bg-green-500/10 text-green-700 border-green-500/20'
+                            : 'bg-gray-900/5 text-gray-700 border-gray-900/10'
+                        }`}
+                        title={m.codeBased ? 'Code-based' : 'Not code-based'}
+                      >
+                        {m.codeBased ? 'CODE' : 'NON-CODE'}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Right: details */}

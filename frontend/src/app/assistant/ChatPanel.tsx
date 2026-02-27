@@ -4,6 +4,14 @@ import { ExternalLink, MessageSquare, Send, X } from 'lucide-react';
 import { sendChatMessage } from './chatClient';
 import { loadThread, saveThread } from './storage';
 import { ChatMessage, ChatRole } from './types';
+import { useRotatingText } from '../hooks/useRotatingText';
+
+const CHAT_PROGRESS_MESSAGES = [
+  'Searching knowledge base…',
+  'Analyzing your question…',
+  'Composing response…',
+  'Almost there…',
+];
 
 type ChatPanelProps = {
   variant: 'compact' | 'full';
@@ -57,6 +65,8 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
       textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
     }
   }, [input, variant]);
+
+  const progressText = useRotatingText(CHAT_PROGRESS_MESSAGES, 2500, isSending);
 
   const canSend = input.trim().length > 0 && !isSending;
 
@@ -120,7 +130,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             className="h-9 w-9 rounded-2xl flex items-center justify-center text-white shadow-sm"
             style={{
               background:
-                'linear-gradient(135deg, rgba(17,24,39,1) 0%, rgba(249,115,22,1) 100%)',
+                'linear-gradient(135deg, rgba(255,88,0,1) 0%, rgba(164,0,90,1) 100%)',
             }}
           >
             <MessageSquare className="h-4 w-4" />
@@ -187,7 +197,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
                     isUser
                       ? {
                           background:
-                            'linear-gradient(135deg, rgba(249,115,22,1) 0%, rgba(236,72,153,1) 100%)',
+                            'linear-gradient(135deg, rgba(255,88,0,1) 0%, rgba(164,0,90,1) 100%)',
                         }
                       : undefined
                   }
@@ -264,8 +274,11 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
 
           {isSending && (
             <div className="flex justify-start">
-              <div className="rounded-3xl bg-white/70 border border-white/60 px-4 py-3 text-sm text-gray-700">
-                Thinking...
+              <div className="rounded-3xl bg-white/70 border border-white/60 px-4 py-3 text-sm text-gray-700 flex items-center gap-2">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />
+                <span key={progressText} className="animate-fade-in">
+                  {progressText}
+                </span>
               </div>
             </div>
           )}
@@ -290,7 +303,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             disabled={!canSend}
             className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition-all focus-ring ${
               canSend
-                ? 'bg-gray-900 text-white border-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                ? 'bg-orange-600 text-white border-orange-600 hover:shadow-md hover:-translate-y-0.5'
                 : 'bg-white/40 text-gray-400 border-white/60 cursor-not-allowed'
             }`}
             aria-label="Send message"

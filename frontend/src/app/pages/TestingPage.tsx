@@ -458,7 +458,7 @@ export function TestingPage() {
                   disabled={!selectedTest || isLoading}
                   className={`py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-all focus-ring ${
                     selectedTest && !isLoading
-                      ? 'bg-gray-900 text-white border-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                      ? 'bg-orange-600 text-white border-orange-600 hover:shadow-md hover:-translate-y-0.5'
                       : 'bg-white/40 text-gray-400 border-white/60 cursor-not-allowed'
                   }`}
                 >
@@ -659,7 +659,7 @@ export function TestingPage() {
                     style={{
                       width: `${mitigationPct}%`,
                       background:
-                        'linear-gradient(90deg, rgba(249,115,22,1) 0%, rgba(236,72,153,1) 100%)',
+                        'linear-gradient(90deg, rgba(255,88,0,1) 0%, rgba(164,0,90,1) 100%)',
                     }}
                   />
                 </div>
@@ -749,7 +749,7 @@ export function TestingPage() {
                 disabled={!selectedTest || isLoading}
                 className={`w-full py-3 rounded-2xl text-white flex items-center justify-center gap-2 border transition-all focus-ring ${
                   selectedTest && !isLoading
-                    ? 'border-gray-900 bg-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                    ? 'border-orange-600 bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
                     : 'border-white/60 bg-white/40 text-gray-400 cursor-not-allowed'
                 }`}
               >
@@ -834,7 +834,7 @@ export function TestingPage() {
               disabled={!canCreateSuite}
               className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
                 canCreateSuite
-                  ? 'bg-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                  ? 'bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
                   : 'bg-gray-300 cursor-not-allowed'
               }`}
             >
@@ -968,7 +968,7 @@ export function TestingPage() {
               disabled={!canCreateTest}
               className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
                 canCreateTest
-                  ? 'bg-gray-900 hover:shadow-md hover:-translate-y-0.5'
+                  ? 'bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
                   : 'bg-gray-300 cursor-not-allowed'
               }`}
             >

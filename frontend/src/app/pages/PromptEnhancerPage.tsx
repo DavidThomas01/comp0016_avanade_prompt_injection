@@ -1,7 +1,124 @@
-import { Send, Copy, RefreshCw, Loader, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Send, Copy, RefreshCw, Loader, Sparkles, CheckCircle2, ChevronDown, Check } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { mitigations } from '../data/mitigations';
 import { enhancePrompt, PromptEnhancementResponse } from '../api/promptEnhancerClient';
+import { useRotatingText } from '../hooks/useRotatingText';
+
+const ENHANCER_PROGRESS_MESSAGES = [
+  'Analyzing prompt structure…',
+  'Applying security mitigations…',
+  'Verifying enhancement quality…',
+  'Finalizing enhanced prompt…',
+];
+
+function ResultAccordion({
+  label,
+  color,
+  content,
+  defaultOpen,
+  onCopy,
+}: {
+  label: string;
+  color: 'gray' | 'orange' | 'green';
+  content: string;
+  defaultOpen: boolean;
+  onCopy: () => void;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [copied, setCopied] = useState(false);
+
+  const colorMap = {
+    gray: {
+      header: 'text-gray-700',
+      bg: 'bg-gray-50/80',
+      border: 'border-gray-200',
+      badge: 'bg-gray-100 text-gray-600',
+    },
+    orange: {
+      header: 'text-orange-700',
+      bg: 'bg-orange-50/80',
+      border: 'border-orange-200',
+      badge: 'bg-orange-100 text-orange-600',
+    },
+    green: {
+      header: 'text-green-700',
+      bg: 'bg-green-50/80',
+      border: 'border-green-200',
+      badge: 'bg-green-100 text-green-600',
+    },
+  };
+
+  const c = colorMap[color];
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onCopy();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const previewLength = 120;
+  const needsTruncation = content.length > previewLength;
+  const preview = needsTruncation ? content.slice(0, previewLength) + '…' : content;
+
+  return (
+    <div className={`rounded-2xl border ${c.border} overflow-hidden transition-all`}>
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className={`w-full flex items-center justify-between gap-3 px-4 py-3 ${c.bg} hover:brightness-95 transition-all`}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`text-sm font-semibold ${c.header}`}>{label}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-all ${
+              copied
+                ? 'bg-green-100 border-green-300 text-green-700'
+                : 'bg-white/80 border-white/60 text-gray-600 hover:bg-white hover:text-gray-900'
+            }`}
+          >
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          <ChevronDown
+            className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          />
+        </div>
+      </button>
+
+      <div
+        className={`grid transition-all duration-200 ease-in-out ${
+          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className={`px-4 py-3 ${c.bg} border-t ${c.border}`}>
+            <pre className="text-sm font-mono whitespace-pre-wrap leading-relaxed text-gray-800 max-h-[300px] overflow-y-auto">
+              {content}
+            </pre>
+          </div>
+        </div>
+      </div>
+
+      {!open && needsTruncation && (
+        <div className={`px-4 py-2.5 ${c.bg} border-t ${c.border}`}>
+          <p className="text-xs text-gray-500 font-mono leading-relaxed">{preview}</p>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className={`mt-1.5 text-xs font-medium ${c.header} hover:underline`}
+          >
+            See more
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PromptEnhancerPage() {
   const [selectedMitigations, setSelectedMitigations] = useState<string[]>([]);
@@ -11,6 +128,8 @@ export function PromptEnhancerPage() {
   const [error, setError] = useState<string | null>(null);
   const selectedCount = selectedMitigations.length;
   const mitigationCards = useMemo(() => mitigations, []);
+
+  const progressText = useRotatingText(ENHANCER_PROGRESS_MESSAGES, 3000, loading);
   
   const toggleMitigation = (id: string) => {
     setSelectedMitigations(prev =>
@@ -146,12 +265,14 @@ export function PromptEnhancerPage() {
                 type="button"
                 onClick={generateEnhancedPrompt}
                 disabled={loading}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-900 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all focus-ring"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-600 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all focus-ring"
               >
                 {loading ? (
                   <>
                     <Loader className="h-4 w-4 animate-spin" />
-                    Enhancing...
+                    <span key={progressText} className="animate-fade-in">
+                      {progressText}
+                    </span>
                   </>
                 ) : (
                   <>
@@ -174,14 +295,14 @@ export function PromptEnhancerPage() {
             
             {error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
-                <div className="text-xs font-medium text-red-900 mb-1">⚠️ Error</div>
+                <div className="text-xs font-medium text-red-900 mb-1">Error</div>
                 <p className="text-xs text-red-800">{error}</p>
               </div>
             )}
 
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-              <div className="text-xs font-medium text-blue-900 mb-1">💡 How it works</div>
-              <p className="text-xs text-blue-800">
+            <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded">
+              <div className="text-xs font-medium text-orange-900 mb-1">How it works</div>
+              <p className="text-xs text-orange-800">
                 1. Your prompt is restructured for clarity<br />
                 2. Security mitigations are prepended<br />
                 3. The result is verified for quality
@@ -189,100 +310,58 @@ export function PromptEnhancerPage() {
             </div>
           </div>
           
-          {/* Right Panel - All Three Outputs */}
+          {/* Right Panel - Results */}
           <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
             <div className="p-4 border-b border-white/60 bg-white/40">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold">Results</h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Original → Improved → Enhanced
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => enhancementResult && copyToClipboard(enhancementResult.enhancedPrompt)}
-                  disabled={!enhancementResult}
-                  className={`inline-flex items-center gap-2 text-xs px-3 py-2 rounded-full border transition-all focus-ring ${
-                    enhancementResult
-                      ? 'bg-white/60 border-white/60 text-gray-800 hover:bg-white/80'
-                      : 'bg-white/40 border-white/60 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  Copy
-                </button>
+              <div>
+                <h2 className="text-lg font-semibold">Results</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Original → Improved → Enhanced
+                </p>
               </div>
             </div>
 
-            <div className="p-4 space-y-4 max-h-[800px] overflow-y-auto">
+            <div className="p-4 space-y-3 max-h-[800px] overflow-y-auto">
               {enhancementResult ? (
                 <>
-                  {/* Original Prompt */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-medium text-gray-700">Original Prompt</div>
-                      <button
-                        onClick={() => copyToClipboard(enhancementResult.originalPrompt)}
-                        className="text-gray-400 hover:text-gray-600"
-                        title="Copy"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="p-3 bg-gray-50 border border-gray-200 rounded text-xs font-mono max-h-[120px] overflow-y-auto">
-                      {enhancementResult.originalPrompt}
-                    </div>
-                  </div>
+                  <ResultAccordion
+                    label="Original Prompt"
+                    color="gray"
+                    content={enhancementResult.originalPrompt}
+                    defaultOpen={false}
+                    onCopy={() => copyToClipboard(enhancementResult.originalPrompt)}
+                  />
 
-                  {/* Improved Prompt */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-medium text-blue-700">Improved Prompt</div>
-                      <button
-                        onClick={() => copyToClipboard(enhancementResult.improvedPrompt)}
-                        className="text-gray-400 hover:text-gray-600"
-                        title="Copy"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded text-xs font-mono max-h-[120px] overflow-y-auto">
-                      {enhancementResult.improvedPrompt}
-                    </div>
-                  </div>
+                  <ResultAccordion
+                    label="Improved Prompt"
+                    color="orange"
+                    content={enhancementResult.improvedPrompt}
+                    defaultOpen={true}
+                    onCopy={() => copyToClipboard(enhancementResult.improvedPrompt)}
+                  />
 
-                  {/* Enhanced Prompt */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-medium text-green-700">Final Enhanced Prompt</div>
-                      <button
-                        onClick={() => copyToClipboard(enhancementResult.enhancedPrompt)}
-                        className="text-gray-400 hover:text-gray-600"
-                        title="Copy"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="p-3 bg-green-50 border border-green-200 rounded text-xs font-mono max-h-[120px] overflow-y-auto">
-                      {enhancementResult.enhancedPrompt}
-                    </div>
-                  </div>
+                  <ResultAccordion
+                    label="Final Enhanced Prompt"
+                    color="green"
+                    content={enhancementResult.enhancedPrompt}
+                    defaultOpen={true}
+                    onCopy={() => copyToClipboard(enhancementResult.enhancedPrompt)}
+                  />
 
                   {/* Verification Status */}
-                  <div className={`p-3 rounded border-2 ${
+                  <div className={`p-4 rounded-2xl border ${
                     enhancementResult.verificationData.verdict === 'PASS'
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-red-50 border-red-200'
+                      ? 'bg-green-50/80 border-green-200'
+                      : 'bg-red-50/80 border-red-200'
                   }`}>
-                    <div className={`text-xs font-bold mb-1 ${
+                    <div className={`text-sm font-bold mb-1.5 ${
                       enhancementResult.verificationData.verdict === 'PASS'
                         ? 'text-green-900'
                         : 'text-red-900'
                     }`}>
                       {enhancementResult.verificationData.verdict === 'PASS' ? '✓ Verification Passed' : '✗ Verification Failed'}
                     </div>
-                    <div className={`text-xs ${
+                    <div className={`text-sm leading-relaxed ${
                       enhancementResult.verificationData.verdict === 'PASS'
                         ? 'text-green-800'
                         : 'text-red-800'
@@ -291,7 +370,7 @@ export function PromptEnhancerPage() {
                     </div>
                     
                     {enhancementResult.verificationData.issues.length > 0 && (
-                      <div className="mt-2 text-xs">
+                      <div className="mt-2.5 text-sm">
                         <div className="font-medium mb-1">Issues:</div>
                         <ul className="list-disc list-inside space-y-0.5">
                           {enhancementResult.verificationData.issues.map((issue, i) => (
@@ -301,7 +380,7 @@ export function PromptEnhancerPage() {
                       </div>
                     )}
 
-                    <div className="mt-2 text-xs text-gray-600">
+                    <div className="mt-2.5 text-xs text-gray-600">
                       Completed in {enhancementResult.attempts} attempt{enhancementResult.attempts !== 1 ? 's' : ''}
                     </div>
                   </div>
@@ -314,7 +393,7 @@ export function PromptEnhancerPage() {
                         {selectedMitigations.map((mitId) => {
                           const m = mitigations.find(mit => mit.id === mitId);
                           return (
-                            <span key={mitId} className="px-2 py-1 bg-orange-500 text-white text-xs rounded">
+                            <span key={mitId} className="px-2 py-1 bg-orange-500 text-white text-xs rounded-full">
                               {m?.name}
                             </span>
                           );
@@ -323,6 +402,15 @@ export function PromptEnhancerPage() {
                     </div>
                   )}
                 </>
+              ) : loading ? (
+                <div className="flex items-center justify-center h-64 text-gray-500">
+                  <div className="text-center space-y-3">
+                    <Loader className="w-10 h-10 mx-auto animate-spin opacity-60" />
+                    <p key={progressText} className="text-sm font-medium animate-fade-in">
+                      {progressText}
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-64 text-gray-400">
                   <div className="text-center">
