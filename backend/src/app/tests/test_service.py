@@ -53,7 +53,6 @@ class TestService():
             model=model_spec,
             environment=environment_spec,
             runner=runner_spec,
-            created_at=parent.created_at
         )
         
         return self.repo.update(db, updated_test)
@@ -117,8 +116,9 @@ class TestService():
         
         if not test:
             raise NotFoundError("test not found")
-                
-        result = self.runner_router.run(test, message)
+             
+        # FLAG: THIS IS CURRENTLY RETURNING A COROUTINE   
+        result = await self.runner_router.run(test, message)
         
         if test.runner.type == RunnerType.PROMPT:
             self._update_context_with_response(db, test, message, result.output)
