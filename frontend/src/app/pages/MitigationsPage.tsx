@@ -66,38 +66,38 @@ export function MitigationsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
         {/* Breadcrumbs */}
         <nav className="flex items-center space-x-2 text-sm mb-6">
-          <Link to="/" className="text-gray-500 hover:text-gray-900 transition-colors focus-ring">
+          <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors focus-ring">
             Home
           </Link>
-          <ChevronRight className="w-4 h-4 text-gray-400" />
-          <span className="text-gray-900 font-medium">Mitigations</span>
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          <span className="text-foreground font-medium">Mitigations</span>
           {selected ? (
             <>
-              <ChevronRight className="w-4 h-4 text-gray-400" />
-              <span className="text-gray-900 font-medium">{selected.name}</span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              <span className="text-foreground font-medium">{selected.name}</span>
             </>
           ) : null}
         </nav>
 
         <div className="mb-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-gray-700">
-            <ShieldCheck className="h-3.5 w-3.5 text-orange-600" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-muted-foreground">
+            <ShieldCheck className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
             Defense techniques & implementations
           </div>
           <h1 className="mt-3 text-3xl font-semibold">
             <span className="gradient-text">Mitigations</span>
           </h1>
-          <p className="text-gray-700 mt-2 max-w-xl">
+          <p className="text-muted-foreground mt-2 max-w-xl">
             Browse mitigation techniques and view reference implementations in different languages.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: list */}
-          <div className="glass-strong rounded-3xl border border-white/60">
-            <div className="px-5 pt-5 pb-4 border-b border-white/60 bg-white/40 rounded-t-3xl">
+          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10">
+            <div className="px-5 pt-5 pb-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 rounded-t-3xl">
               <div className="font-semibold">All Mitigations</div>
-              <div className="text-xs text-gray-600 mt-1">Click one to view details</div>
+              <div className="text-xs text-muted-foreground mt-1">Click one to view details</div>
             </div>
 
             <div className="p-4">
@@ -110,22 +110,22 @@ export function MitigationsPage() {
                     onClick={() => navigate(`/mitigations/${m.id}`)}
                     className={`w-full text-left p-4 rounded-2xl border transition-all mb-3 focus-ring ${
                       active
-                        ? 'border-orange-500/40 bg-orange-500/10'
-                        : 'border-white/60 bg-white/40 hover:bg-white/70 hover:shadow-sm'
+                        ? 'border-orange-500/40 bg-orange-500/10 dark:bg-orange-500/15'
+                        : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-sm'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <div className="font-semibold text-sm text-gray-900">{m.name}</div>
-                        <div className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">
+                        <div className="font-semibold text-sm text-foreground">{m.name}</div>
+                        <div className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                           {m.description}
                         </div>
                       </div>
                       <span
                         className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full border whitespace-nowrap ${
                           m.codeBased
-                            ? 'bg-green-500/10 text-green-700 border-green-500/20'
-                            : 'bg-gray-900/5 text-gray-700 border-gray-900/10'
+                            ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                            : 'bg-gray-900/5 dark:bg-white/5 text-muted-foreground border-gray-900/10 dark:border-white/10'
                         }`}
                         title={m.codeBased ? 'Code-based' : 'Not code-based'}
                       >
@@ -141,17 +141,17 @@ export function MitigationsPage() {
           {/* Right: details */}
           <div className="lg:col-span-2">
             {selected ? (
-              <div className="glass-strong rounded-3xl border border-white/60 p-6 sm:p-8">
+              <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 p-6 sm:p-8">
                 <div className="flex items-start justify-between gap-4 mb-6">
                   <div className="min-w-0">
-                    <h2 className="text-2xl font-semibold text-gray-900">{selected.name}</h2>
-                    <p className="text-sm text-gray-700 mt-2 leading-relaxed">{selected.description}</p>
+                    <h2 className="text-2xl font-semibold text-foreground">{selected.name}</h2>
+                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{selected.description}</p>
                   </div>
                   <span
                     className={`text-xs font-semibold px-3 py-1 rounded-full border ${
                       selected.codeBased
-                        ? 'bg-green-500/10 text-green-700 border-green-500/20'
-                        : 'bg-gray-900/5 text-gray-700 border-gray-900/10'
+                        ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                        : 'bg-gray-900/5 dark:bg-white/5 text-muted-foreground border-gray-900/10 dark:border-white/10'
                     }`}
                   >
                     {selected.codeBased ? 'Code-based' : 'Non code-based'}
@@ -163,7 +163,7 @@ export function MitigationsPage() {
                     <h3 className="font-medium mb-2">What it does</h3>
                     <div className="space-y-2">
                       {selected.details.map((p, idx) => (
-                        <p key={idx} className="text-sm text-gray-700 leading-relaxed">
+                        <p key={idx} className="text-sm text-muted-foreground leading-relaxed">
                           {p}
                         </p>
                       ))}
@@ -172,14 +172,14 @@ export function MitigationsPage() {
 
                   <div>
                     <h3 className="font-medium mb-2">Strategy</h3>
-                    <p className="text-sm text-gray-700 leading-relaxed">{selected.strategy}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{selected.strategy}</p>
                   </div>
 
                   <div>
                     <h3 className="font-medium mb-2">Typical flow</h3>
                     <ol className="list-decimal ml-5 space-y-1">
                       {selected.defenseFlow.map((step, idx) => (
-                        <li key={idx} className="text-sm text-gray-700">
+                        <li key={idx} className="text-sm text-muted-foreground">
                           {step}
                         </li>
                       ))}
@@ -189,14 +189,14 @@ export function MitigationsPage() {
                   <div>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                       <h3 className="font-medium flex items-center gap-2">
-                        <Code2 className="h-4 w-4 text-orange-600" />
+                        <Code2 className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                         Implementation
                       </h3>
 
                       {selected.codeBased ? (
                         <div className="flex items-center gap-2">
                           <Tabs value={lang} onValueChange={(v) => setLang(v as CodeLanguage)}>
-                            <TabsList className="bg-white/60 border border-white/60">
+                            <TabsList className="bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10">
                               {LANG_OPTIONS.map(opt => (
                                 <TabsTrigger key={opt.value} value={opt.value}>
                                   {opt.label}
@@ -211,8 +211,8 @@ export function MitigationsPage() {
                             disabled={!codeToShow || !canCopy}
                             className={`inline-flex items-center gap-2 text-xs px-3 py-2 rounded-full border transition-all focus-ring ${
                               !codeToShow || !canCopy
-                                ? 'text-gray-400 border-white/60 bg-white/40 cursor-not-allowed'
-                                : 'text-gray-800 border-white/60 bg-white/60 hover:bg-white/80'
+                                ? 'text-muted-foreground border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 cursor-not-allowed'
+                                : 'text-foreground border-white/60 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10'
                             }`}
                             title={canCopy ? 'Copy to clipboard' : 'Clipboard not available'}
                           >
@@ -229,12 +229,12 @@ export function MitigationsPage() {
                           <code>{codeToShow}</code>
                         </pre>
                       ) : (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-muted-foreground">
                           No snippet available for this language yet. Try another language.
                         </p>
                       )
                     ) : (
-                      <p className="text-sm text-gray-700 leading-relaxed">
+                      <p className="text-sm text-muted-foreground leading-relaxed">
                         This mitigation is primarily model/training/process-level. The app can reference it, but it is not
                         typically implemented as a single runtime code module.
                       </p>
@@ -243,9 +243,9 @@ export function MitigationsPage() {
                 </div>
               </div>
             ) : (
-              <div className="glass rounded-3xl border border-white/60 p-6">
+              <div className="glass rounded-3xl border border-white/60 dark:border-white/10 p-6">
                 <h2 className="text-xl font-semibold mb-2">Mitigation not found</h2>
-                <p className="text-sm text-gray-700">Select a mitigation from the list to view its details.</p>
+                <p className="text-sm text-muted-foreground">Select a mitigation from the list to view its details.</p>
               </div>
             )}
           </div>

@@ -180,7 +180,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
       }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/50">
+      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/50 dark:border-white/10">
         <div className="flex items-center gap-2.5">
           <div
             className="h-8 w-8 rounded-xl flex items-center justify-center text-white shadow-sm"
@@ -192,10 +192,10 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             <MessageSquare className="h-3.5 w-3.5" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-gray-900">
+            <div className="text-sm font-semibold text-foreground">
               Security Knowledge Assistant
             </div>
-            <div className="text-[11px] text-gray-500">
+            <div className="text-[11px] text-muted-foreground">
               {messageCount > 0
                 ? `${messageCount} question${messageCount === 1 ? '' : 's'} asked`
                 : 'Ask a question to get started'}
@@ -208,7 +208,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             <button
               type="button"
               onClick={handleClearChat}
-              className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-white/60 transition-colors"
+              className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
               aria-label="Clear chat"
               title="New chat"
             >
@@ -219,7 +219,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             <button
               type="button"
               onClick={openFullView}
-              className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-white/60 transition-colors"
+              className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
               title="Open in full view"
             >
               <ExternalLink className="h-3.5 w-3.5" />
@@ -229,7 +229,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             <button
               type="button"
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-white/60 transition-colors"
+              className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
               aria-label="Close assistant"
             >
               <X className="h-4 w-4" />
@@ -257,7 +257,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
                   className={`max-w-[88%] rounded-2xl text-[13px] leading-relaxed ${
                     isUser
                       ? 'text-white px-3.5 py-2'
-                      : 'text-gray-800 px-3.5 py-2.5 glass-chat-reply'
+                      : 'text-foreground px-3.5 py-2.5 glass-chat-reply'
                   }`}
                   style={
                     isUser
@@ -279,8 +279,8 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
                   )}
 
                   {message.suggestions?.length ? (
-                    <div className="mt-2.5 pt-2 border-t border-gray-200/40 space-y-1.5">
-                      <div className="font-semibold text-gray-500 uppercase tracking-wider text-[10px]">
+                    <div className="mt-2.5 pt-2 border-t border-border/40 space-y-1.5">
+                      <div className="font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
                         Try asking
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -289,7 +289,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
                             key={s}
                             type="button"
                             onClick={() => handleSuggestionClick(s)}
-                            className="rounded-full border border-white/50 bg-white/40 px-2.5 py-1 text-[11px] text-gray-600 hover:border-orange-300 hover:text-orange-700 hover:bg-orange-50/60 transition-colors cursor-pointer"
+                            className="rounded-full border border-white/50 dark:border-white/10 bg-white/40 dark:bg-white/5 px-2.5 py-1 text-[11px] text-muted-foreground hover:border-orange-300 dark:hover:border-orange-600 hover:text-orange-700 dark:hover:text-orange-400 hover:bg-orange-50/60 dark:hover:bg-orange-950/40 transition-colors cursor-pointer"
                           >
                             {s}
                           </button>
@@ -304,7 +304,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
 
           {isSending && streamedTextRef.current === '' && (
             <div className="flex justify-start">
-              <div className="rounded-2xl glass-chat-reply px-3.5 py-2 text-[13px] text-gray-500 flex items-center gap-2">
+              <div className="rounded-2xl glass-chat-reply px-3.5 py-2 text-[13px] text-muted-foreground flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-500" />
                 Thinking&hellip;
               </div>
@@ -314,7 +314,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
       </div>
 
       {/* Input */}
-      <div className="border-t border-white/50 px-3.5 py-2.5">
+      <div className="border-t border-white/50 dark:border-white/10 px-3.5 py-2.5">
         <div className="flex items-end gap-2">
           <textarea
             ref={textareaRef}
@@ -323,14 +323,14 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             onKeyDown={handleKeyDown}
             rows={1}
             placeholder="Ask about vulnerabilities, mitigations, or testing..."
-            className="flex-1 resize-none rounded-xl border border-white/50 bg-white/50 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-400 focus:ring-1 focus:ring-orange-200 focus:outline-none overflow-y-hidden min-h-[38px] transition-colors"
+            className="flex-1 resize-none rounded-xl border border-white/50 dark:border-white/10 bg-white/50 dark:bg-white/5 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-orange-400 dark:focus:border-orange-500 focus:ring-1 focus:ring-orange-200 dark:focus:ring-orange-500/30 focus:outline-none overflow-y-hidden min-h-[38px] transition-colors"
             disabled={isSending}
           />
           {isSending ? (
             <button
               type="button"
               onClick={handleAbort}
-              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-gray-700 text-white hover:bg-gray-800 transition-colors"
+              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-gray-700 dark:bg-gray-600 text-white hover:bg-gray-800 dark:hover:bg-gray-500 transition-colors"
               aria-label="Stop generating"
               title="Stop"
             >
@@ -344,7 +344,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
               className={`inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl transition-all ${
                 canSend
                   ? 'bg-orange-500 text-white hover:bg-orange-600 hover:shadow-md'
-                  : 'bg-white/40 text-gray-400 cursor-not-allowed'
+                  : 'bg-white/40 dark:bg-white/5 text-muted-foreground cursor-not-allowed'
               }`}
               aria-label="Send message"
             >

@@ -272,7 +272,6 @@ export function TestingPage() {
       setRunResult(run);
     } catch (e) {
       console.error(e);
-      // keep UI simple for now; backend already returns JSON/text error
       alert('Run failed. Check backend logs / Network tab for details.');
     } finally {
       setIsLoading(false);
@@ -281,8 +280,6 @@ export function TestingPage() {
 
   /* ---------------- Save Current Test ---------------- */
 
-  // Save Current Test persists a new test record to the backend.
-  // Current behavior: it saves the prompt override (if provided) as the test prompt.
   const canSaveCurrentTest = !!selectedTest && promptOverride.trim().length > 0 && !isLoading;
 
   const saveCurrentTest = async () => {
@@ -313,7 +310,6 @@ export function TestingPage() {
 
   /* ---------------- Delete Test ---------------- */
   const deleteTest = async (id: string) => {
-    // Optimistic UI: remove locally first, then confirm with backend
     const prevTests = tests;
     setTests(prev => prev.filter(t => t.id !== id));
     setSelectedTest(prev => (prev?.id === id ? null : prev));
@@ -321,14 +317,12 @@ export function TestingPage() {
     try {
       await apiDelete(`/tests/${encodeURIComponent(id)}`);
     } catch (e) {
-      // rollback
       setTests(prevTests);
       console.error(e);
       alert('Delete failed. The backend did not remove the test.');
       return;
     }
 
-    // If we deleted the selected test, pick a sensible new selection
     setSelectedTest(prev => {
       if (prev && prev.id !== id) return prev;
       const remaining = prevTests.filter(t => t.id !== id);
@@ -343,7 +337,6 @@ export function TestingPage() {
     );
     if (!ok) return;
 
-    // Optimistic UI: remove suite + its tests locally first, then confirm with backend.
     const prevSuites = suites;
     const prevTests = tests;
     const prevExpanded = expandedSuiteIds;
@@ -355,31 +348,23 @@ export function TestingPage() {
     setSuites(remainingSuites);
     setTests(remainingTests);
 
-    // Remove from expanded set
     setExpandedSuiteIds(prev => {
       const next = new Set(prev);
       next.delete(suiteId);
       return next;
     });
 
-    // Clear selection if it belonged to that suite
     setSelectedTest(prev => {
       if (!prev) return prev;
       return prev.suiteId === suiteId ? null : prev;
     });
 
-    // Clear run/prompt if selection got cleared
-    setRunResult(prev => {
-      // If we cleared selected test (suite deleted), run result is irrelevant
-      // but we can't read selectedTest synchronously; safe to clear always.
-      return null;
-    });
+    setRunResult(null);
     setPromptOverride('');
 
     try {
       await apiDelete(`/suites/${encodeURIComponent(suiteId)}?confirm=true`);
     } catch (e) {
-      // rollback everything
       setSuites(prevSuites);
       setTests(prevTests);
       setExpandedSuiteIds(prevExpanded);
@@ -388,7 +373,6 @@ export function TestingPage() {
       return;
     }
 
-    // If selected is null now, pick a sensible fallback
     setSelectedTest(prev => {
       if (prev) return prev;
       return remainingTests[0] ?? null;
@@ -420,32 +404,32 @@ export function TestingPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
         {/* Header */}
         <div className="mb-7">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-gray-700">
-            <FlaskConical className="h-3.5 w-3.5 text-orange-600" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-muted-foreground">
+            <FlaskConical className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
             Backend-driven test runner
           </div>
           <h1 className="mt-3 text-3xl font-semibold">
             <span className="gradient-text">Testing</span>
           </h1>
-          <p className="text-gray-700 mt-2">
+          <p className="text-muted-foreground mt-2">
             Create suites and tests, select mitigations, and run prompts against the backend runner.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* ---------------- Left: Suites & Tests ---------------- */}
-          <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
-            <div className="p-4 border-b border-white/60 bg-white/40">
+          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
+            <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-semibold flex items-center gap-2">
-                    <Folder className="h-4 w-4 text-orange-600" />
+                    <Folder className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                     Test Suites
                   </h2>
-                  <div className="text-xs text-gray-600 mt-1">Folders & tests (persisted)</div>
+                  <div className="text-xs text-muted-foreground mt-1">Folders & tests (persisted)</div>
                 </div>
 
-                <div className="text-[11px] px-3 py-1 rounded-full bg-white/60 border border-white/60 text-gray-700">
+                <div className="text-[11px] px-3 py-1 rounded-full bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 text-muted-foreground">
                   {isLoading ? 'Loading…' : `${suites.length} suites`}
                 </div>
               </div>
@@ -459,7 +443,7 @@ export function TestingPage() {
                   className={`py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-all focus-ring ${
                     selectedTest && !isLoading
                       ? 'bg-orange-600 text-white border-orange-600 hover:shadow-md hover:-translate-y-0.5'
-                      : 'bg-white/40 text-gray-400 border-white/60 cursor-not-allowed'
+                      : 'bg-white/40 dark:bg-white/5 text-muted-foreground border-white/60 dark:border-white/10 cursor-not-allowed'
                   }`}
                 >
                   <Play className="w-4 h-4" />
@@ -479,12 +463,12 @@ export function TestingPage() {
                   disabled={!canSaveCurrentTest}
                   className={`py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-all focus-ring ${
                     canSaveCurrentTest
-                      ? 'bg-white/60 text-gray-900 border-white/60 hover:bg-white/80 hover:shadow-sm'
-                      : 'bg-white/40 text-gray-400 border-white/60 cursor-not-allowed'
+                      ? 'bg-white/60 dark:bg-white/5 text-foreground border-white/60 dark:border-white/10 hover:bg-white/80 dark:hover:bg-white/10 hover:shadow-sm'
+                      : 'bg-white/40 dark:bg-white/5 text-muted-foreground border-white/60 dark:border-white/10 cursor-not-allowed'
                   }`}
                   title={canSaveCurrentTest ? 'Persist current test to backend' : 'Add a prompt override first'}
                 >
-                  <Sparkles className="w-4 h-4 text-orange-600" />
+                  <Sparkles className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                   <span className="text-sm font-semibold">Save</span>
                 </button>
               </div>
@@ -498,25 +482,25 @@ export function TestingPage() {
                 return (
                   <div
                     key={suite.id}
-                    className="rounded-3xl border border-white/60 bg-white/40 overflow-hidden"
+                    className="rounded-3xl border border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 overflow-hidden"
                   >
                     <div className="p-4 flex items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => toggleExpandedSuite(suite.id)}
-                        className="flex items-center gap-2 text-left min-w-0 focus-ring rounded-2xl px-2 py-1 hover:bg-white/60 transition-colors"
+                        className="flex items-center gap-2 text-left min-w-0 focus-ring rounded-2xl px-2 py-1 hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
                         title="Expand/collapse"
                       >
                         <ChevronDown
-                          className={`h-4 w-4 text-gray-500 transition-transform ${
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${
                             isExpanded ? 'rotate-180' : ''
                           }`}
                         />
                         <div className="min-w-0">
-                          <div className="font-semibold text-sm text-gray-900 truncate">
+                          <div className="font-semibold text-sm text-foreground truncate">
                             {suite.name}
                           </div>
-                          <div className="text-[11px] text-gray-600">
+                          <div className="text-[11px] text-muted-foreground">
                             {suiteTests.length} test{suiteTests.length === 1 ? '' : 's'}
                           </div>
                         </div>
@@ -525,7 +509,7 @@ export function TestingPage() {
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          className="p-2 rounded-full hover:bg-white/60 transition-colors focus-ring text-gray-600"
+                          className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground"
                           title="Suite details"
                           onClick={() => {
                             alert(suite.description || 'No description');
@@ -537,7 +521,7 @@ export function TestingPage() {
                         <button
                           type="button"
                           onClick={() => openAddTestModal(suite.id)}
-                          className="p-2 rounded-full hover:bg-white/60 transition-colors focus-ring text-gray-700"
+                          className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground hover:text-foreground"
                           title="Add test"
                         >
                           <Plus className="w-4 h-4" />
@@ -549,7 +533,7 @@ export function TestingPage() {
                             e.stopPropagation();
                             deleteSuite(suite);
                           }}
-                          className="p-2 rounded-full hover:bg-white/60 transition-colors focus-ring text-gray-500 hover:text-red-700"
+                          className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground hover:text-red-700 dark:hover:text-red-400"
                           title="Delete suite (backend)"
                           aria-label="Delete suite"
                         >
@@ -561,8 +545,8 @@ export function TestingPage() {
                     {isExpanded && (
                       <div className="px-3 pb-3">
                         {suiteTests.length === 0 ? (
-                          <div className="text-xs text-gray-600 px-3 py-4 rounded-2xl bg-white/50 border border-white/60">
-                            No tests yet. Click “+” to add one.
+                          <div className="text-xs text-muted-foreground px-3 py-4 rounded-2xl bg-white/50 dark:bg-white/5 border border-white/60 dark:border-white/10">
+                            No tests yet. Click "+" to add one.
                           </div>
                         ) : (
                           <div className="space-y-2">
@@ -578,16 +562,16 @@ export function TestingPage() {
                                   }}
                                   className={`group p-3 rounded-2xl cursor-pointer border transition-all ${
                                     active
-                                      ? 'border-orange-500/40 bg-orange-500/10'
-                                      : 'border-white/60 bg-white/50 hover:bg-white/70 hover:shadow-sm'
+                                      ? 'border-orange-500/40 bg-orange-500/10 dark:bg-orange-500/15'
+                                      : 'border-white/60 dark:border-white/10 bg-white/50 dark:bg-white/5 hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-sm'
                                   }`}
                                 >
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0">
-                                      <div className="font-semibold text-sm text-gray-900 truncate">
+                                      <div className="font-semibold text-sm text-foreground truncate">
                                         {test.name}
                                       </div>
-                                      <div className="text-[11px] text-gray-600 mt-1">
+                                      <div className="text-[11px] text-muted-foreground mt-1">
                                         {test.requiredMitigations?.length ?? 0} active mitigations
                                       </div>
                                     </div>
@@ -598,7 +582,7 @@ export function TestingPage() {
                                         e.stopPropagation();
                                         deleteTest(test.id);
                                       }}
-                                      className="p-2 rounded-full hover:bg-white/60 transition-colors focus-ring text-gray-500 hover:text-gray-900"
+                                      className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground hover:text-foreground"
                                       title="Delete (backend)"
                                       aria-label="Delete test"
                                     >
@@ -619,41 +603,41 @@ export function TestingPage() {
               <button
                 type="button"
                 onClick={() => setIsCreateSuiteOpen(true)}
-                className="w-full py-3 rounded-3xl border border-dashed border-white/60 bg-white/30 hover:bg-white/50 hover:shadow-sm transition-all flex items-center justify-center gap-2 text-gray-700 focus-ring"
+                className="w-full py-3 rounded-3xl border border-dashed border-white/60 dark:border-white/15 bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 hover:shadow-sm transition-all flex items-center justify-center gap-2 text-muted-foreground focus-ring"
                 title="Create new folder"
                 aria-label="Create folder"
               >
-                <Plus className="w-4 h-4 text-orange-600" />
+                <Plus className="w-4 h-4 text-orange-600 dark:text-orange-400" />
                 <span className="text-sm font-semibold">Create suite</span>
               </button>
             </div>
           </div>
 
           {/* ---------------- Middle: Mitigations ---------------- */}
-          <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
-            <div className="p-4 border-b border-white/60 bg-white/40">
+          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
+            <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-semibold">Mitigations</h2>
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Highlighted mitigations match the selected test.
                   </p>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-[11px] text-gray-600">Active</div>
-                  <div className="text-sm font-semibold text-gray-900">
+                  <div className="text-[11px] text-muted-foreground">Active</div>
+                  <div className="text-sm font-semibold text-foreground">
                     {activeMitigationCount} / {totalMitigations}
                   </div>
                 </div>
               </div>
 
               <div className="mt-3">
-                <div className="flex items-center justify-between text-[11px] text-gray-600 mb-1">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
                   <span>Coverage</span>
                   <span>{mitigationPct}%</span>
                 </div>
-                <div className="h-2 rounded-full bg-white/60 border border-white/60 overflow-hidden">
+                <div className="h-2 rounded-full bg-white/60 dark:bg-white/10 border border-white/60 dark:border-white/10 overflow-hidden">
                   <div
                     className="h-full rounded-full"
                     style={{
@@ -674,23 +658,23 @@ export function TestingPage() {
                     key={m.id}
                     className={`p-4 rounded-2xl border transition-all ${
                       active
-                        ? 'border-green-500/25 bg-green-500/10'
-                        : 'border-white/60 bg-white/40'
+                        ? 'border-green-500/25 bg-green-500/10 dark:bg-green-500/15'
+                        : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-gray-900">{m.name}</div>
+                      <div className="text-sm font-semibold text-foreground">{m.name}</div>
                       <span
                         className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${
                           active
-                            ? 'bg-green-500/10 text-green-700 border-green-500/20'
-                            : 'bg-gray-900/5 text-gray-700 border-gray-900/10'
+                            ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                            : 'bg-gray-900/5 dark:bg-white/5 text-muted-foreground border-gray-900/10 dark:border-white/10'
                         }`}
                       >
                         {active ? 'ACTIVE' : 'INACTIVE'}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-700 mt-2 leading-relaxed">
+                    <div className="text-xs text-muted-foreground mt-2 leading-relaxed">
                       {m.description}
                     </div>
                   </div>
@@ -700,15 +684,15 @@ export function TestingPage() {
           </div>
 
           {/* ---------------- Right: Run & Prompt ---------------- */}
-          <div className="glass-strong rounded-3xl border border-white/60 overflow-hidden">
-            <div className="p-4 border-b border-white/60 bg-white/40">
+          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
+            <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="font-semibold truncate">
                     {selectedTest?.name ?? 'Select a test'}
                   </h2>
-                  <div className="text-xs text-gray-600 mt-1">
-                    Model: <span className="font-semibold text-gray-900">{selectedModelLabel}</span>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Model: <span className="font-semibold text-foreground">{selectedModelLabel}</span>
                   </div>
                 </div>
 
@@ -716,8 +700,8 @@ export function TestingPage() {
                   <span
                     className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full border ${
                       runResult.passed
-                        ? 'bg-green-500/10 text-green-700 border-green-500/20'
-                        : 'bg-red-500/10 text-red-700 border-red-500/20'
+                        ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                        : 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20'
                     }`}
                   >
                     {runResult.passed ? (
@@ -728,7 +712,7 @@ export function TestingPage() {
                     {runResult.passed ? 'PASSED' : 'FAILED'}
                   </span>
                 ) : (
-                  <span className="text-[11px] px-3 py-1 rounded-full bg-white/60 border border-white/60 text-gray-700">
+                  <span className="text-[11px] px-3 py-1 rounded-full bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 text-muted-foreground">
                     {selectedTest ? 'Ready' : '—'}
                   </span>
                 )}
@@ -740,7 +724,7 @@ export function TestingPage() {
                 value={promptOverride}
                 onChange={e => setPromptOverride(e.target.value)}
                 placeholder="Enter test prompt (optional override)…"
-                className="w-full h-40 resize-none rounded-2xl border border-white/60 bg-white/60 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus-ring"
+                className="w-full h-40 resize-none rounded-2xl border border-white/60 dark:border-white/10 bg-white/60 dark:bg-white/5 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus-ring"
               />
 
               <button
@@ -750,34 +734,34 @@ export function TestingPage() {
                 className={`w-full py-3 rounded-2xl text-white flex items-center justify-center gap-2 border transition-all focus-ring ${
                   selectedTest && !isLoading
                     ? 'border-orange-600 bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
-                    : 'border-white/60 bg-white/40 text-gray-400 cursor-not-allowed'
+                    : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 text-muted-foreground cursor-not-allowed'
                 }`}
               >
                 <Send className="w-4 h-4" />
                 <span className="font-semibold">{isLoading ? 'Running…' : 'Send'}</span>
               </button>
 
-              <div className="text-[11px] text-gray-600">
-                Backend: <span className="font-semibold text-gray-900">{API_BASE}</span>
+              <div className="text-[11px] text-muted-foreground">
+                Backend: <span className="font-semibold text-foreground">{API_BASE}</span>
               </div>
 
               {runResult && (
-                <div className="mt-3 rounded-3xl border border-white/60 bg-white/40 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-white/60 bg-white/40 flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-gray-900">Run Result</div>
-                    <div className="text-[11px] text-gray-600">
-                      mitigations: <span className="font-semibold text-gray-900">{runResult.activeMitigations.length}</span>
+                <div className="mt-3 rounded-3xl border border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-foreground">Run Result</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      mitigations: <span className="font-semibold text-foreground">{runResult.activeMitigations.length}</span>
                     </div>
                   </div>
 
                   <div className="p-4 space-y-3">
-                    <div className="text-xs text-gray-600">
+                    <div className="text-xs text-muted-foreground">
                       passed:{' '}
-                      <span className="font-semibold text-gray-900">{String(runResult.passed)}</span>
+                      <span className="font-semibold text-foreground">{String(runResult.passed)}</span>
                     </div>
 
                     <div>
-                      <div className="text-xs text-gray-600 mb-2">response:</div>
+                      <div className="text-xs text-muted-foreground mb-2">response:</div>
                       <pre className="text-xs bg-gray-950 text-emerald-100 border border-white/10 rounded-2xl p-4 overflow-auto whitespace-pre-wrap break-words">
                         {runResult.modelResponse}
                       </pre>
@@ -802,13 +786,13 @@ export function TestingPage() {
               value={newSuiteName}
               onChange={e => setNewSuiteName(e.target.value)}
               placeholder="Suite name"
-              className="w-full px-4 py-2.5 rounded-2xl border border-white/60 bg-white/70 text-sm focus-ring"
+              className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm focus-ring"
             />
             <textarea
               value={newSuiteDescription}
               onChange={e => setNewSuiteDescription(e.target.value)}
               placeholder="Description (optional)"
-              className="w-full h-24 px-4 py-3 rounded-2xl border border-white/60 bg-white/70 text-sm resize-none focus-ring"
+              className="w-full h-24 px-4 py-3 rounded-2xl border border-border bg-background text-sm resize-none focus-ring"
             />
           </div>
 
@@ -816,7 +800,7 @@ export function TestingPage() {
             <button
               type="button"
               onClick={() => setIsCreateSuiteOpen(false)}
-              className="px-4 py-2 rounded-2xl border border-white/60 bg-white/60 hover:bg-white/80 transition-colors focus-ring"
+              className="px-4 py-2 rounded-2xl border border-border bg-background hover:bg-accent transition-colors focus-ring"
             >
               Cancel
             </button>
@@ -835,7 +819,7 @@ export function TestingPage() {
               className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
                 canCreateSuite
                   ? 'bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
-                  : 'bg-gray-300 cursor-not-allowed'
+                  : 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
               }`}
             >
               Create
@@ -856,11 +840,11 @@ export function TestingPage() {
               value={newTestTitle}
               onChange={e => setNewTestTitle(e.target.value)}
               placeholder="Test name"
-              className="w-full px-4 py-2.5 rounded-2xl border border-white/60 bg-white/70 text-sm focus-ring"
+              className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm focus-ring"
             />
 
             <Tabs value={addTestTab} onValueChange={v => setAddTestTab(v as AddTestTab)}>
-              <TabsList className="w-full bg-white/60 border border-white/60">
+              <TabsList className="w-full bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10">
                 <TabsTrigger value="existing" className="flex-1">
                   Existing model
                 </TabsTrigger>
@@ -873,7 +857,7 @@ export function TestingPage() {
                 <select
                   value={newTestModelId}
                   onChange={e => setNewTestModelId(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-2xl border border-white/60 bg-white/70 text-sm mt-2 focus-ring"
+                  className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm mt-2 focus-ring"
                 >
                   {AI_MODELS.map(m => (
                     <option key={m.id} value={m.id}>
@@ -881,21 +865,20 @@ export function TestingPage() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-600 mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   Uses backend mock provider for now (no real API calls yet).
                 </p>
               </TabsContent>
 
               <TabsContent value="custom">
-                {/* Use password input (review suggestion) */}
                 <input
                   type="password"
                   value={newTestApiKey}
                   onChange={e => setNewTestApiKey(e.target.value)}
                   placeholder="API key"
-                  className="w-full px-4 py-2.5 rounded-2xl border border-white/60 bg-white/70 text-sm mt-2 focus-ring"
+                  className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm mt-2 focus-ring"
                 />
-                <p className="text-xs text-gray-600 mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   The backend should not log or persist API keys. (Currently runs are mocked.)
                 </p>
               </TabsContent>
@@ -913,23 +896,23 @@ export function TestingPage() {
                       onClick={() => toggleNewTestMitigation(m.id)}
                       className={`p-4 rounded-2xl border text-left transition-all focus-ring ${
                         active
-                          ? 'border-green-500/25 bg-green-500/10'
-                          : 'border-white/60 bg-white/50 hover:bg-white/70 hover:shadow-sm'
+                          ? 'border-green-500/25 bg-green-500/10 dark:bg-green-500/15'
+                          : 'border-white/60 dark:border-white/10 bg-white/50 dark:bg-white/5 hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-sm'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-gray-900">{m.name}</div>
+                        <div className="text-sm font-semibold text-foreground">{m.name}</div>
                         <span
                           className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${
                             active
-                              ? 'bg-green-500/10 text-green-700 border-green-500/20'
-                              : 'bg-gray-900/5 text-gray-700 border-gray-900/10'
+                              ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                              : 'bg-gray-900/5 dark:bg-white/5 text-muted-foreground border-gray-900/10 dark:border-white/10'
                           }`}
                         >
                           {active ? 'ON' : 'OFF'}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-700 mt-2 leading-relaxed line-clamp-2">
+                      <div className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-2">
                         {m.description}
                       </div>
                     </button>
@@ -937,8 +920,8 @@ export function TestingPage() {
                 })}
               </div>
 
-              <div className="text-xs text-gray-600 mt-2">
-                You can create a test with <span className="font-semibold text-gray-900">0 mitigations</span>.
+              <div className="text-xs text-muted-foreground mt-2">
+                You can create a test with <span className="font-semibold text-foreground">0 mitigations</span>.
               </div>
             </div>
           </div>
@@ -950,7 +933,7 @@ export function TestingPage() {
                 setIsAddTestOpen(false);
                 setTargetSuiteId(null);
               }}
-              className="px-4 py-2 rounded-2xl border border-white/60 bg-white/60 hover:bg-white/80 transition-colors focus-ring"
+              className="px-4 py-2 rounded-2xl border border-border bg-background hover:bg-accent transition-colors focus-ring"
             >
               Cancel
             </button>
@@ -969,7 +952,7 @@ export function TestingPage() {
               className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
                 canCreateTest
                   ? 'bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
-                  : 'bg-gray-300 cursor-not-allowed'
+                  : 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
               }`}
             >
               Add test

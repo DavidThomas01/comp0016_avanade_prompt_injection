@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
+import { ThemeProvider } from './components/ThemeProvider';
 import { Header } from './components/Header';
 import { ChatWidget } from './assistant/ChatWidget';
 
@@ -12,8 +13,9 @@ import { SecurityKnowledgeAssistantPage } from './pages/SecurityKnowledgeAssista
 
 export default function App() {
   return (
+    <ThemeProvider>
     <Router>
-      <div className="relative min-h-screen app-bg text-gray-900">
+      <div className="relative min-h-screen app-bg text-foreground">
         {/* Decorative background (no functional impact) */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="app-blob blob-1" />
@@ -44,5 +46,6 @@ export default function App() {
         </div>
       </div>
     </Router>
+    </ThemeProvider>
   );
 }
