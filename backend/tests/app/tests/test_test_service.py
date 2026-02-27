@@ -3,8 +3,9 @@ import pytest
 from app.tests import TestService
 from app.tests.dto import *
 from domain.tests import *
+from domain.providers import Message
 
-from unittest.mock import Mock
+from unittest.mock import Mock, AsyncMock
 import pytest
 from core.exceptions import NotFoundError, InvalidModelConfiguration
 
@@ -22,7 +23,7 @@ def ctx():
     
     mock_runner = Mock()
     
-    mock_runner.run.return_value = TestResult(output="Hello", analysis="Pass", started_at=datetime.now(), finished_at=datetime.now())
+    mock_runner.run = AsyncMock(return_value=TestResult(output="Hello", analysis="Pass", started_at=datetime.now(), finished_at=datetime.now()))
     
     service = TestService(mock_repo, mock_runner)
 
@@ -204,6 +205,15 @@ def test_delete_missing_test_failure(ctx):
         ctx.service.delete(db=None, id="missing")
         
         
+async def test_run_test_success(ctx):
+    test = generate_test("test_123")
+    
+    result = await ctx.service.run(db=None, id="test_123", message=Message(role="user", content="message"))
+    
+    assert result.output == "Hello"
+    assert result.analysis == "Pass"
+
+    
 def test_run_missing_test_failure(ctx):
     with pytest.raises(NotFoundError):
         ctx.service.delete(db=None, id="missing")
