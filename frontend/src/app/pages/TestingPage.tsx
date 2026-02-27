@@ -1,67 +1,81 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Info, Plus, Play, Send, Trash2 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Sparkles, Send, RefreshCcw } from 'lucide-react';
 
-import { mitigations } from '../data/mitigations';
+type ModelType = 'platform' | 'external';
+type EnvType = 'mitigation' | 'custom';
+type RunnerType = 'prompt' | 'framework';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '../components/ui/dialog';
-
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
-
-/**
- * Backend-driven types (match /api responses)
- */
-type TestSuite = {
-  id: string;
-  name: string;
-  description?: string;
-  createdAt?: string;
-  updatedAt?: string;
+type Message = {
+  role: string;
+  content: string;
 };
 
-type ModelConfig =
-  | { mode: 'existing'; provider: string; modelId: string }
-  | { mode: 'custom'; provider: string; apiKey: string };
+type ModelSpec = {
+  type: ModelType;
+  model_id?: string | null;
+  endpoint?: string | null;
+  key?: string | null;
+};
+
+type EnvironmentSpec = {
+  type: EnvType;
+  system_prompt: string;
+  mitigations: string[];
+};
+
+type RunnerSpec = {
+  type: RunnerType;
+  context: Message[];
+};
 
 type Test = {
   id: string;
-  suiteId: string;
   name: string;
-  prompt: string;
-  mitigations: string[];
-  model_cfg: ModelConfig;
+  model: ModelSpec;
+  environment?: EnvironmentSpec | null;
+  runner: RunnerSpec;
   created_at?: string;
-  updated_at?: string;
 };
 
-type Run = {
+type TestAnalysis = {
+  flagged: boolean;
+  score: number;
+  reason: string;
+};
+
+type RunResult = {
+  output: string;
+  analysis: TestAnalysis;
+  started_at: string;
+  finished_at: string;
+};
+
+type ChatMessage = {
   id: string;
-  testId: string;
-  suiteId: string;
-  promptUsed: string;
-  activeMitigations: string[];
-  modelResponse: string;
-  passed: boolean;
-  createdAt?: string;
+  role: 'user' | 'assistant';
+  content: string;
+  pending?: boolean;
 };
 
-/**
- * API base (Vite)
- * - add frontend/.env: VITE_API_BASE=http://localhost:8080/api
- */
 const API_BASE: string =
-  (import.meta as any)?.env?.VITE_API_BASE ?? 'http://localhost:8080/api';
+  (import.meta as any)?.env?.VITE_API_BASE ?? 'http://localhost:8000/api';
 
-const AI_MODELS = [
-  { id: 'gpt-5', label: 'GPT-5' },
-  { id: 'gpt-4o', label: 'GPT-4o' },
-  { id: 'claude-3.5', label: 'Claude 3.5' },
-  { id: 'gemini-1.5', label: 'Gemini 1.5' },
+const MODEL_OPTIONS = [
+  { id: 'gpt-5.2', label: 'gpt-5.2' },
+  { id: 'gpt-5.1', label: 'gpt-5.1' },
+  { id: 'gpt-5-nano', label: 'gpt-5-nano' },
+  { id: 'o4-nano', label: 'o4-nano' },
+  { id: 'claude-sonnet-4-5', label: 'claude-sonnet-4-5' },
+  { id: 'claude-haiku-4-5', label: 'claude-haiku-4-5' },
+];
+
+const MITIGATION_OPTIONS = [
+  { id: 'delimiter_tokens', label: 'Delimiter Tokens' },
+  { id: 'input_validation', label: 'Input Validation' },
+  { id: 'pattern_matching', label: 'Pattern Matching' },
+  { id: 'blocklist_filtering', label: 'Blocklist Filtering' },
+  { id: 'output_sanitization', label: 'Output Sanitization' },
+  { id: 'anomaly_detection', label: 'Anomaly Detection' },
 ];
 
 async function apiGet<T>(path: string): Promise<T> {
@@ -80,739 +94,445 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
-async function apiDelete(path: string): Promise<void> {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(await res.text());
-}
+const makeId = () => `msg_${Math.random().toString(36).slice(2, 10)}`;
 
 export function TestingPage() {
-  /* ---------------- State ---------------- */
-
-  const [suites, setSuites] = useState<TestSuite[]>([]);
   const [tests, setTests] = useState<Test[]>([]);
-  const [selectedTest, setSelectedTest] = useState<Test | null>(null);
-
-  const [expandedSuiteIds, setExpandedSuiteIds] = useState<Set<string>>(new Set());
-
-  const [promptOverride, setPromptOverride] = useState('');
-  const [runResult, setRunResult] = useState<Run | null>(null);
+  const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
+  const [chatByTestId, setChatByTestId] = useState<Record<string, ChatMessage[]>>({});
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [modelType, setModelType] = useState<ModelType>('platform');
+  const [modelId, setModelId] = useState(MODEL_OPTIONS[0]?.id ?? 'gpt-5.2');
+  const [endpoint, setEndpoint] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [envType, setEnvType] = useState<EnvType>('mitigation');
+  const [systemPrompt, setSystemPrompt] = useState('You are a careful, secure assistant.');
+  const [selectedMitigations, setSelectedMitigations] = useState<string[]>([]);
+  const [promptInput, setPromptInput] = useState('');
 
-  /* ---------------- Load from backend ---------------- */
+  const selectedTest = useMemo(
+    () => tests.find(t => t.id === selectedTestId) ?? null,
+    [tests, selectedTestId]
+  );
 
-  const refreshAll = async () => {
+  const selectedChat = selectedTestId ? chatByTestId[selectedTestId] ?? [] : [];
+
+  const refreshTests = async () => {
     setIsLoading(true);
     try {
-      const suitesData = await apiGet<TestSuite[]>('/suites');
-      setSuites(suitesData);
-
-      const testsPairs = await Promise.all(
-        suitesData.map(async s => {
-          const suiteTests = await apiGet<Test[]>(
-            `/tests?suiteId=${encodeURIComponent(s.id)}`
-          );
-          return suiteTests;
-        })
-      );
-
-      const flatTests = testsPairs.flat();
-      setTests(flatTests);
-
-      // Keep selection stable if possible
-      setSelectedTest(prev => {
-        if (!prev) return flatTests[0] ?? null;
-        const stillThere = flatTests.find(t => t.id === prev.id);
-        return stillThere ?? (flatTests[0] ?? null);
-      });
+      const data = await apiGet<Test[]>('/tests');
+      setTests(data);
+      setSelectedTestId(prev => prev ?? data[0]?.id ?? null);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    refreshAll().catch(err => {
-      console.error(err);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    refreshTests().catch(console.error);
   }, []);
 
-  /* ---------------- Derived ---------------- */
-
-  const suiteIdToTests = useMemo(() => {
-    const map = new Map<string, Test[]>();
-    for (const t of tests) {
-      const arr = map.get(t.suiteId) ?? [];
-      arr.push(t);
-      map.set(t.suiteId, arr);
-    }
-    return map;
-  }, [tests]);
-
-  const selectedMitigationSet = useMemo(() => {
-    return new Set(selectedTest?.mitigations ?? []);
-  }, [selectedTest]);
-
-  /* ---------------- Create Suite Modal ---------------- */
-
-  const [isCreateSuiteOpen, setIsCreateSuiteOpen] = useState(false);
-  const [newSuiteName, setNewSuiteName] = useState('');
-  const [newSuiteDescription, setNewSuiteDescription] = useState('');
-
-  const canCreateSuite = newSuiteName.trim().length > 0;
-
-  const createSuite = async () => {
-    if (!canCreateSuite) return;
-
-    const created = await apiPost<TestSuite>('/suites', {
-      name: newSuiteName.trim(),
-      description: newSuiteDescription.trim() || undefined,
-    });
-
-    setSuites(prev => [...prev, created]);
-    setExpandedSuiteIds(prev => new Set(prev).add(created.id));
-
-    setIsCreateSuiteOpen(false);
-    setNewSuiteName('');
-    setNewSuiteDescription('');
-
-    // also load tests for it (none) without refetching everything
-    setTests(prev => prev);
-  };
-
-  /* ---------------- Add Test Modal ---------------- */
-
-  type AddTestTab = 'existing' | 'custom';
-  const [isAddTestOpen, setIsAddTestOpen] = useState(false);
-  const [targetSuiteId, setTargetSuiteId] = useState<string | null>(null);
-
-  const [newTestTitle, setNewTestTitle] = useState('');
-  const [newTestMitigations, setNewTestMitigations] = useState<string[]>([]);
-  const [addTestTab, setAddTestTab] = useState<AddTestTab>('existing');
-
-  const [newTestModelId, setNewTestModelId] = useState(AI_MODELS[0]?.id ?? 'gpt-5');
-  const [newTestApiKey, setNewTestApiKey] = useState('');
-
-  const canCreateTest =
-    !!targetSuiteId &&
-    newTestTitle.trim().length > 0 &&
-    (addTestTab === 'existing' || newTestApiKey.trim().length > 0);
-
-  const openAddTestModal = (suiteId: string) => {
-    setTargetSuiteId(suiteId);
-    setIsAddTestOpen(true);
-
-    setNewTestTitle('');
-    setNewTestMitigations([]);
-    setAddTestTab('existing');
-    setNewTestModelId(AI_MODELS[0]?.id ?? 'gpt-5');
-    setNewTestApiKey('');
-  };
-
-  const toggleNewTestMitigation = (id: string) => {
-    setNewTestMitigations(prev =>
+  const toggleMitigation = (id: string) => {
+    setSelectedMitigations(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
 
-  const createTestFromModal = async () => {
-    if (!canCreateTest || !targetSuiteId) return;
+  const canCreateTest =
+    newName.trim().length > 0 &&
+    (modelType === 'platform' ? modelId.trim().length > 0 : endpoint.trim() && apiKey.trim()) &&
+    (modelType === 'external' || systemPrompt.trim().length > 0);
 
-    const model_cfg: ModelConfig =
-      addTestTab === 'existing'
-        ? { mode: 'existing', provider: 'openai', modelId: newTestModelId }
-        : { mode: 'custom', provider: 'custom', apiKey: newTestApiKey.trim() };
-
-    const created = await apiPost<Test>('/tests', {
-      suiteId: targetSuiteId,
-      name: newTestTitle.trim(),
-      mitigations: newTestMitigations, // can be []
-      model_cfg,
-    });
-
-    setTests(prev => [...prev, created]);
-    setSelectedTest(created);
-    setRunResult(null);
-    setPromptOverride('');
-
-    setIsAddTestOpen(false);
-    setTargetSuiteId(null);
-  };
-
-  /* ---------------- Run Current Test ---------------- */
-
-  const runSelectedTest = async () => {
-    if (!selectedTest) return;
-
+  const createTest = async () => {
+    if (!canCreateTest) return;
     setIsLoading(true);
     try {
-      const run = await apiPost<Run>('/runs', {
-        testId: selectedTest.id,
-        promptOverride: promptOverride.trim().length > 0 ? promptOverride.trim() : undefined,
-        mitigationsOverride: selectedTest.mitigations ?? [],
-      });
+      const model: ModelSpec =
+        modelType === 'platform'
+          ? { type: 'platform', model_id: modelId }
+          : { type: 'external', endpoint: endpoint.trim(), key: apiKey.trim() };
 
-      setRunResult(run);
-    } catch (e) {
-      console.error(e);
-      // keep UI simple for now; backend already returns JSON/text error
-      alert('Run failed. Check backend logs / Network tab for details.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      const environment: EnvironmentSpec | null =
+        modelType === 'platform'
+          ? {
+              type: envType,
+              system_prompt: systemPrompt.trim(),
+              mitigations: envType === 'mitigation' ? selectedMitigations : [],
+            }
+          : null;
 
-  /* ---------------- Save Current Test ---------------- */
+      const runner: RunnerSpec = {
+        type: 'prompt',
+        context: [],
+      };
 
-  // Save Current Test persists a new test record to the backend.
-  // Current behavior: it saves the prompt override (if provided) as the test prompt.
-  const canSaveCurrentTest = !!selectedTest && promptOverride.trim().length > 0 && !isLoading;
-
-  const saveCurrentTest = async () => {
-    if (!selectedTest) return;
-
-    const prompt = promptOverride.trim();
-    if (prompt.length === 0) return;
-
-    setIsLoading(true);
-    try {
       const created = await apiPost<Test>('/tests', {
-        suiteId: selectedTest.suiteId,
-        name: selectedTest.name,
-        prompt,
-        mitigations: selectedTest.mitigations ?? [],
-        model_cfg:
-          selectedTest.model_cfg ?? { mode: 'existing', provider: 'openai', modelId: 'gpt-5' },
+        name: newName.trim(),
+        model,
+        environment,
+        runner,
       });
 
-      setTests(prev => [...prev, created]);
-      setSelectedTest(created);
+      setTests(prev => [created, ...prev]);
+      setSelectedTestId(created.id);
       setRunResult(null);
-      setPromptOverride('');
+      setNewName('');
     } finally {
       setIsLoading(false);
     }
   };
 
-  /* ---------------- Delete Test ---------------- */
-  const deleteTest = async (id: string) => {
-    // Optimistic UI: remove locally first, then confirm with backend
-    const prevTests = tests;
-    setTests(prev => prev.filter(t => t.id !== id));
-    setSelectedTest(prev => (prev?.id === id ? null : prev));
+  const runTest = async () => {
+    if (!selectedTest || promptInput.trim().length === 0) return;
 
-    try {
-      await apiDelete(`/tests/${encodeURIComponent(id)}`);
-    } catch (e) {
-      // rollback
-      setTests(prevTests);
-      console.error(e);
-      alert('Delete failed. The backend did not remove the test.');
-      return;
-    }
+    const userMessage: ChatMessage = {
+      id: makeId(),
+      role: 'user',
+      content: promptInput.trim(),
+    };
 
-    // If we deleted the selected test, pick a sensible new selection
-    setSelectedTest(prev => {
-      if (prev && prev.id !== id) return prev;
-      const remaining = prevTests.filter(t => t.id !== id);
-      return remaining[0] ?? null;
-    });
-  };
+    const pendingMessage: ChatMessage = {
+      id: makeId(),
+      role: 'assistant',
+      content: 'Running test...',
+      pending: true,
+    };
 
-  /* ---------------- Delete Suite ---------------- */
-  const deleteSuite = async (suite: TestSuite) => {
-    const ok = window.confirm(
-      `Delete suite "${suite.name}"?\n\nThis will also delete all tests and runs inside it.`
-    );
-    if (!ok) return;
-
-    // Optimistic UI: remove suite + its tests locally first, then confirm with backend.
-    const prevSuites = suites;
-    const prevTests = tests;
-    const prevExpanded = expandedSuiteIds;
-
-    const suiteId = suite.id;
-    const remainingSuites = prevSuites.filter(s => s.id !== suiteId);
-    const remainingTests = prevTests.filter(t => t.suiteId !== suiteId);
-
-    setSuites(remainingSuites);
-    setTests(remainingTests);
-
-    // Remove from expanded set
-    setExpandedSuiteIds(prev => {
-      const next = new Set(prev);
-      next.delete(suiteId);
+    setChatByTestId(prev => {
+      const next = { ...prev };
+      const existing = next[selectedTest.id] ?? [];
+      next[selectedTest.id] = [...existing, userMessage, pendingMessage];
       return next;
     });
 
-    // Clear selection if it belonged to that suite
-    setSelectedTest(prev => {
-      if (!prev) return prev;
-      return prev.suiteId === suiteId ? null : prev;
-    });
-
-    // Clear run/prompt if selection got cleared
-    setRunResult(prev => {
-      // If we cleared selected test (suite deleted), run result is irrelevant
-      // but we can't read selectedTest synchronously; safe to clear always.
-      return null;
-    });
-    setPromptOverride('');
-
+    setPromptInput('');
+    setIsRunning(true);
     try {
-      await apiDelete(`/suites/${encodeURIComponent(suiteId)}?confirm=true`);
-    } catch (e) {
-      // rollback everything
-      setSuites(prevSuites);
-      setTests(prevTests);
-      setExpandedSuiteIds(prevExpanded);
-      console.error(e);
-      alert('Delete suite failed. The backend did not remove the suite.');
-      return;
-    }
+      const result = await apiPost<RunResult>(`/tests/${selectedTest.id}/run`, {
+        role: 'user',
+        content: userMessage.content,
+      });
 
-    // If selected is null now, pick a sensible fallback
-    setSelectedTest(prev => {
-      if (prev) return prev;
-      return remainingTests[0] ?? null;
-    });
+      setRunResult(result);
+
+      setChatByTestId(prev => {
+        const next = { ...prev };
+        const existing = next[selectedTest.id] ?? [];
+        next[selectedTest.id] = existing.map(msg =>
+          msg.id === pendingMessage.id
+            ? { id: msg.id, role: 'assistant', content: result.output, pending: false }
+            : msg
+        );
+        return next;
+      });
+    } catch (error) {
+      setChatByTestId(prev => {
+        const next = { ...prev };
+        const existing = next[selectedTest.id] ?? [];
+        next[selectedTest.id] = existing.map(msg =>
+          msg.id === pendingMessage.id
+            ? {
+                id: msg.id,
+                role: 'assistant',
+                content: 'Run failed. Check backend logs for details.',
+                pending: false,
+              }
+            : msg
+        );
+        return next;
+      });
+      console.error(error);
+    } finally {
+      setIsRunning(false);
+    }
   };
 
-  /* ---------------- Render ---------------- */
+  const analysisPassed = runResult ? !runResult.analysis.flagged : null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+    <div
+      className="min-h-screen bg-gradient-to-br from-amber-50 via-slate-50 to-emerald-50 relative overflow-hidden"
+      style={{ fontFamily: '"Fraunces", "Iowan Old Style", "Palatino", serif' }}
+    >
+      <div className="absolute -top-24 -right-20 h-64 w-64 rounded-full bg-amber-200/40 blur-3xl" />
+      <div className="absolute -bottom-24 -left-16 h-72 w-72 rounded-full bg-emerald-200/40 blur-3xl" />
+
+      <div className="relative max-w-6xl mx-auto px-6 py-10">
+        <header className="flex flex-col gap-2 mb-8">
+          <div className="flex items-center gap-2 text-amber-700">
+            <Sparkles className="h-5 w-5" />
+            <span className="text-sm uppercase tracking-[0.2em]">Test Runner Demo</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-semibold text-slate-900">
+            Build a test, run it, and review the analysis in real time.
+          </h1>
+          <p className="text-slate-600 max-w-2xl">
+            Create a test configuration, then chat with the model to see how it responds and
+            whether the response is flagged as a jailbreak or prompt injection.
+          </p>
+        </header>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ---------------- Left: Suites & Tests ---------------- */}
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="font-semibold">Test Suites</h2>
-              <div className="text-xs text-gray-500 mt-1">Folders & tests (persisted)</div>
-            </div>
-
-            <div className="p-4 space-y-3">
-              {/* Run/Save */}
-              <div className="space-y-2">
+          <section className="lg:col-span-1 space-y-6">
+            <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900">Create Test</h2>
                 <button
                   type="button"
-                  onClick={() => runSelectedTest()}
-                  disabled={!selectedTest || isLoading}
-                  className={`w-full py-2 rounded flex items-center justify-center gap-2 ${
-                    selectedTest && !isLoading
-                      ? 'bg-gray-800 text-white hover:bg-gray-900'
-                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  }`}
+                  onClick={refreshTests}
+                  className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800"
                 >
-                  <Play className="w-4 h-4" />
-                  <span>Run Current Test</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await saveCurrentTest();
-                    } catch (e) {
-                      console.error(e);
-                      alert('Save failed. Check backend logs / Network tab.');
-                    }
-                  }}
-                  disabled={!canSaveCurrentTest}
-                  className={`w-full py-2 rounded flex items-center justify-center gap-2 ${
-                    canSaveCurrentTest
-                      ? 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  }`}
-                  title={canSaveCurrentTest ? 'Persist current test to backend' : 'Select a test first'}
-                >
-                  <Play className="w-4 h-4" />
-                  <span>Save Current Test</span>
+                  <RefreshCcw className="h-4 w-4" />
+                  Refresh
                 </button>
               </div>
-            </div>
 
-            {/* Suites list */}
-            {suites.map(suite => {
-              const suiteTests = suiteIdToTests.get(suite.id) ?? [];
-              const isExpanded = expandedSuiteIds.has(suite.id);
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-slate-700 mb-1">Test name</label>
+                  <input
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    placeholder="Injection defense baseline"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  />
+                </div>
 
-              return (
-                <div key={suite.id} className="bg-white border border-gray-200 rounded">
-                  <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setExpandedSuiteIds(prev => {
-                            const next = new Set(prev);
-                            if (next.has(suite.id)) next.delete(suite.id);
-                            else next.add(suite.id);
-                            return next;
-                          });
-                        }}
-                        className="text-left font-medium"
-                        title="Expand/collapse"
-                      >
-                        {suite.name}
-                      </button>
+                <div>
+                  <label className="block text-sm text-slate-700 mb-1">Model type</label>
+                  <select
+                    value={modelType}
+                    onChange={e => setModelType(e.target.value as ModelType)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="platform">Platform model</option>
+                    <option value="external">External model</option>
+                  </select>
+                </div>
 
-                      <button
-                        type="button"
-                        className="text-gray-400 hover:text-gray-600"
-                        title="Suite details"
-                        onClick={() => {
-                          alert(suite.description || 'No description');
-                        }}
-                      >
-                        <Info className="w-4 h-4" />
-                      </button>
-
-                      <span className="text-xs text-gray-400">{suiteTests.length}</span>
+                {modelType === 'platform' ? (
+                  <div>
+                    <label className="block text-sm text-slate-700 mb-1">Model id</label>
+                    <select
+                      value={modelId}
+                      onChange={e => setModelId(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    >
+                      {MODEL_OPTIONS.map(model => (
+                        <option key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm text-slate-700 mb-1">Endpoint</label>
+                      <input
+                        value={endpoint}
+                        onChange={e => setEndpoint(e.target.value)}
+                        placeholder="https://api.example.com/v1/chat"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      />
                     </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => openAddTestModal(suite.id)}
-                        className="p-1 rounded hover:bg-gray-100"
-                        title="Add test"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          deleteSuite(suite);
-                        }}
-                        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-600"
-                        title="Delete suite (backend)"
-                        aria-label="Delete suite"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div>
+                      <label className="block text-sm text-slate-700 mb-1">API key</label>
+                      <input
+                        value={apiKey}
+                        onChange={e => setApiKey(e.target.value)}
+                        placeholder="sk-..."
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      />
                     </div>
                   </div>
+                )}
 
-                  {isExpanded && (
-                    <div className="p-2 space-y-1">
-                      {suiteTests.length === 0 ? (
-                        <div className="text-xs text-gray-400 px-2 py-3">
-                          No tests yet. Click “+” to add one.
+                {modelType === 'platform' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm text-slate-700 mb-1">Environment type</label>
+                      <select
+                        value={envType}
+                        onChange={e => setEnvType(e.target.value as EnvType)}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="mitigation">Mitigation stack</option>
+                        <option value="custom">Custom system prompt</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-slate-700 mb-1">System prompt</label>
+                      <textarea
+                        value={systemPrompt}
+                        onChange={e => setSystemPrompt(e.target.value)}
+                        rows={3}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      />
+                    </div>
+
+                    {envType === 'mitigation' && (
+                      <div>
+                        <label className="block text-sm text-slate-700 mb-2">Mitigations</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {MITIGATION_OPTIONS.map(mitigation => (
+                            <button
+                              key={mitigation.id}
+                              type="button"
+                              onClick={() => toggleMitigation(mitigation.id)}
+                              className={`rounded-xl border px-3 py-2 text-xs text-left transition ${
+                                selectedMitigations.includes(mitigation.id)
+                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                                  : 'border-slate-200 bg-white text-slate-600'
+                              }`}
+                            >
+                              {mitigation.label}
+                            </button>
+                          ))}
                         </div>
-                      ) : (
-                        suiteTests.map(test => (
-                          <div
-                            key={test.id}
-                            onClick={() => {
-                              setSelectedTest(test);
-                              setRunResult(null);
-                            }}
-                            className={`p-2 rounded cursor-pointer border ${
-                              selectedTest?.id === test.id
-                                ? 'border-orange-500 bg-orange-50'
-                                : 'border-transparent hover:bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="font-medium text-sm truncate">{test.name}</div>
-                                <div className="text-xs text-gray-500 mt-0.5">
-                                  {test.mitigations?.length ?? 0} active mitigations
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  deleteTest(test.id);
-                                }}
-                                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                                title="Delete (backend)"
-                                aria-label="Delete test"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Add Folder Button (bottom) */}
-            <div className="flex justify-center pt-2">
-              <button
-                type="button"
-                onClick={() => setIsCreateSuiteOpen(true)}
-                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg
-                          text-gray-500 hover:border-orange-500 hover:text-orange-500
-                          flex items-center justify-center gap-2 transition-colors"
-                title="Create new folder"
-                aria-label="Create folder"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Create suite</span>
-              </button>
-            </div>
-          </div>
-
-          {/* ---------------- Middle: Mitigations ---------------- */}
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="font-semibold">Mitigations</h2>
-              <p className="text-xs text-gray-500 mt-1">
-                Highlighted mitigations match the selected test.
-              </p>
-            </div>
-
-            <div className="p-4 space-y-3">
-              {mitigations.map(m => {
-                const active = selectedMitigationSet.has(m.id);
-                return (
-                  <div
-                    key={m.id}
-                    className={`p-3 border-2 rounded ${
-                      active ? 'border-green-500 bg-green-50' : 'border-gray-200'
-                    }`}
-                  >
-                    <div className="text-sm font-medium">{m.name}</div>
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
+                )}
 
-            <div className="p-4">
-              <div className="bg-gray-100 rounded p-4">
-                <div className="text-xs text-gray-500 mb-2">Active Mitigations</div>
-                <div className="text-2xl font-bold text-orange-500">
-                  {(selectedTest?.mitigations?.length ?? 0)} / {mitigations.length}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ---------------- Right: Run & Prompt ---------------- */}
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-200">
-              <h2 className="font-semibold">{selectedTest?.name ?? 'Select a test'}</h2>
-              <div className="text-xs text-gray-500 mt-1">
-                Model:{' '}
-                {selectedTest?.model_cfg?.mode === 'existing'
-                  ? selectedTest.model_cfg.modelId
-                  : 'custom'}
-              </div>
-            </div>
-
-            <div className="p-4 space-y-3">
-              <textarea
-                value={promptOverride}
-                onChange={e => setPromptOverride(e.target.value)}
-                placeholder="Enter test prompt (optional override)…"
-                className="w-full h-36 px-3 py-2 border rounded resize-none"
-              />
-
-              <button
-                type="button"
-                onClick={() => runSelectedTest()}
-                disabled={!selectedTest || isLoading}
-                className={`w-full py-3 rounded text-white flex items-center justify-center gap-2 ${
-                  selectedTest && !isLoading ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-300'
-                }`}
-              >
-                <Send className="w-4 h-4" />
-                <span>Send</span>
-              </button>
-
-              <div className="text-xs text-gray-500">Backend: {API_BASE}</div>
-
-              {runResult && (
-                <div className="mt-4 border rounded p-3">
-                  <div className="text-sm font-medium mb-2">Run Result</div>
-                  <div className="text-xs text-gray-500">
-                    passed: <span className="font-semibold">{String(runResult.passed)}</span>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-2">response:</div>
-                  <pre className="text-xs bg-gray-50 border rounded p-2 overflow-auto">
-                    {runResult.modelResponse}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ---------------- Create Suite Modal ---------------- */}
-      <Dialog open={isCreateSuiteOpen} onOpenChange={setIsCreateSuiteOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Create Suite</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <input
-              value={newSuiteName}
-              onChange={e => setNewSuiteName(e.target.value)}
-              placeholder="Suite name"
-              className="w-full px-3 py-2 border rounded"
-            />
-            <textarea
-              value={newSuiteDescription}
-              onChange={e => setNewSuiteDescription(e.target.value)}
-              placeholder="Description (optional)"
-              className="w-full h-24 px-3 py-2 border rounded resize-none"
-            />
-          </div>
-
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setIsCreateSuiteOpen(false)}
-              className="px-4 py-2 border rounded"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await createSuite();
-                } catch (e) {
-                  console.error(e);
-                  alert('Create suite failed. Check backend logs.');
-                }
-              }}
-              disabled={!canCreateSuite}
-              className={`px-4 py-2 rounded text-white ${
-                canCreateSuite ? 'bg-orange-500' : 'bg-gray-300'
-              }`}
-            >
-              Create
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ---------------- Add Test Modal ---------------- */}
-      <Dialog open={isAddTestOpen} onOpenChange={setIsAddTestOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Add Test</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <input
-              value={newTestTitle}
-              onChange={e => setNewTestTitle(e.target.value)}
-              placeholder="Test name"
-              className="w-full px-3 py-2 border rounded"
-            />
-
-            <Tabs value={addTestTab} onValueChange={v => setAddTestTab(v as AddTestTab)}>
-              <TabsList className="w-full">
-                <TabsTrigger value="existing" className="flex-1">
-                  Existing model
-                </TabsTrigger>
-                <TabsTrigger value="custom" className="flex-1">
-                  Custom model
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="existing">
-                <select
-                  value={newTestModelId}
-                  onChange={e => setNewTestModelId(e.target.value)}
-                  className="w-full px-3 py-2 border rounded mt-2"
+                <button
+                  type="button"
+                  onClick={createTest}
+                  disabled={!canCreateTest || isLoading}
+                  className="w-full rounded-xl bg-slate-900 text-white py-2 text-sm disabled:opacity-50"
                 >
-                  {AI_MODELS.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-2">
-                  Uses backend mock provider for now (no real API calls yet).
-                </p>
-              </TabsContent>
+                  Create Test
+                </button>
+              </div>
+            </div>
 
-              <TabsContent value="custom">
-                {/* Use password input (review suggestion) */}
-                <input
-                  type="password"
-                  value={newTestApiKey}
-                  onChange={e => setNewTestApiKey(e.target.value)}
-                  placeholder="API key"
-                  className="w-full px-3 py-2 border rounded mt-2"
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  The backend should not log or persist API keys. (Currently runs are mocked.)
-                </p>
-              </TabsContent>
-            </Tabs>
-
-            <div>
-              <div className="text-sm font-medium mb-2">Mitigations implemented</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {mitigations.map(m => (
+            <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900 mb-4">Saved Tests</h3>
+              <div className="space-y-2">
+                {tests.length === 0 && (
+                  <div className="text-sm text-slate-500">No tests yet. Create one to begin.</div>
+                )}
+                {tests.map(test => (
                   <button
-                    key={m.id}
+                    key={test.id}
                     type="button"
-                    onClick={() => toggleNewTestMitigation(m.id)}
-                    className={`p-3 border-2 rounded text-left ${
-                      newTestMitigations.includes(m.id)
-                        ? 'border-green-500 bg-green-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                    onClick={() => {
+                      setSelectedTestId(test.id);
+                      setRunResult(null);
+                    }}
+                    className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
+                      test.id === selectedTestId
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
                     }`}
                   >
-                    <div className="text-sm font-medium">{m.name}</div>
+                    <div className="font-medium">{test.name}</div>
+                    <div className="text-xs opacity-80">
+                      {test.model.type === 'platform' ? test.model.model_id : 'External model'}
+                    </div>
                   </button>
                 ))}
               </div>
-              <div className="text-xs text-gray-500 mt-2">
-                You can create a test with <span className="font-semibold">0 mitigations</span>.
+            </div>
+          </section>
+
+          <section className="lg:col-span-2 space-y-6">
+            <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Test Chat</h2>
+                  <p className="text-sm text-slate-500">
+                    {selectedTest ? selectedTest.name : 'Select a test to begin.'}
+                  </p>
+                </div>
+                <div className="text-xs text-slate-500">
+                  {selectedTest ? `Runner: ${selectedTest.runner.type}` : null}
+                </div>
+              </div>
+
+              <div className="h-[360px] overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-4">
+                {selectedChat.length === 0 && (
+                  <div className="text-sm text-slate-500">
+                    Start by sending a prompt. Your conversation will appear here.
+                  </div>
+                )}
+                {selectedChat.map(message => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                        message.role === 'user'
+                          ? 'bg-slate-900 text-white'
+                          : message.pending
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-white border border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {message.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex flex-col md:flex-row gap-3">
+                <input
+                  value={promptInput}
+                  onChange={e => setPromptInput(e.target.value)}
+                  placeholder="Type a prompt to run against the test"
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={runTest}
+                  disabled={!selectedTest || promptInput.trim().length === 0 || isRunning}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm text-white disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                  Run Test
+                </button>
               </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => {
-                setIsAddTestOpen(false);
-                setTargetSuiteId(null);
-              }}
-              className="px-4 py-2 border rounded"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await createTestFromModal();
-                } catch (e) {
-                  console.error(e);
-                  alert('Add test failed. Check backend logs.');
-                }
-              }}
-              disabled={!canCreateTest}
-              className={`px-4 py-2 rounded text-white ${
-                canCreateTest ? 'bg-orange-500' : 'bg-gray-300'
-              }`}
-            >
-              Add test
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900 mb-4">Analysis</h3>
+              {!runResult && (
+                <div className="text-sm text-slate-500">
+                  Run a prompt to see the analysis summary.
+                </div>
+              )}
+              {runResult && (
+                <div
+                  className={`rounded-2xl border px-4 py-4 ${
+                    analysisPassed
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                      : 'border-rose-300 bg-rose-50 text-rose-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    {analysisPassed ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4" />
+                    )}
+                    {analysisPassed ? 'Pass' : 'Fail'}
+                  </div>
+                  <div className="text-sm mt-2">Score: {runResult.analysis.score.toFixed(2)}</div>
+                  <div className="text-sm mt-2">{runResult.analysis.reason}</div>
+                  <div className="text-xs mt-3 opacity-80">
+                    Started: {runResult.started_at} | Finished: {runResult.finished_at}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
