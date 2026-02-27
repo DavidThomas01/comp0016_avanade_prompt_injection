@@ -37,7 +37,7 @@ class EnvironmentSpec:
 
     def validate(self) -> None:
         if self.type == EnvType.MITIGATION:
-            if not self.mitigations:
+            if self.mitigations is None:
                 raise InvalidModelConfiguration("mitigation setup requires a mitigations list")
 
         if self.type == EnvType.CUSTOM:

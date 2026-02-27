@@ -47,8 +47,10 @@ class TestEnvironmentSpec:
             mitigations=[]
         )
         
-        with pytest.raises(InvalidModelConfiguration, match="requires a mitigations list"):
-            spec.validate()
+        spec.validate()
+        
+        assert spec.type == EnvType.MITIGATION
+        assert not len(spec.mitigations)
 
     def test_validate_custom_type_success(self):
         """Valid custom environment passes validation"""
