@@ -6,6 +6,7 @@ from datetime import datetime
 from domain.mitigations import *
 from infra.config.mitigations import MITIGATION_REGISTRY
 from infra.tests.analyzers import PromptTestAnalyser
+from core.exceptions import UnknownMitigation
 
 
 class PromptRunner(TestRunner):
@@ -111,8 +112,11 @@ class PromptRunner(TestRunner):
         return [mitigation for mitigation in mitigations if self._is_layer_mitigation(layer, mitigation)]
     
     
-    def _is_layer_mitigation(self, layer, mitigation):
-        return MITIGATION_REGISTRY.get(mitigation).layer == layer
+    def _is_layer_mitigation(self, layer, mitigation_id):
+        mitigation = MITIGATION_REGISTRY.get(mitigation_id)
+        if not mitigation:
+            raise UnknownMitigation()
+        return mitigation.layer == layer
         
         
     async def _run_test_on_external_model(self, test: Test, prompt: Optional[Message]) -> ModelResponse:
