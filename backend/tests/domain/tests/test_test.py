@@ -104,7 +104,6 @@ class TestTestEntity:
         
         updated_test = original_test.update(
             name="Updated Name",
-            created_at=original_test.created_at
         )
         
         assert updated_test.id == original_test.id
@@ -131,7 +130,6 @@ class TestTestEntity:
         new_model = ModelSpec.create_platform(model_id="claude-sonnet-4-5")
         updated_test = original_test.update(
             model=new_model,
-            created_at=original_test.created_at
         )
         
         assert updated_test.model == new_model
@@ -157,7 +155,6 @@ class TestTestEntity:
         ])
         updated_test = original_test.update(
             runner=new_runner,
-            created_at=original_test.created_at
         )
         
         assert updated_test.runner == new_runner

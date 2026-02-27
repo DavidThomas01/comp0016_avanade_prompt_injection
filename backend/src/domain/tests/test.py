@@ -48,7 +48,6 @@ class Test:
         model: Optional[ModelSpec] = None,
         environment: Optional[EnvironmentSpec] = None,
         runner: Optional[RunnerSpec] = None,
-        created_at: datetime
     ) -> "Test":
         """
         Create a new version of this test with modifications.
@@ -66,7 +65,7 @@ class Test:
             model=new_model,
             environment=new_env,
             runner=new_runner,
-            created_at=created_at,
+            created_at=self.created_at,
         )
 
 
