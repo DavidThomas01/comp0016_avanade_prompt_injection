@@ -31,6 +31,11 @@ export function ChatWidget() {
             open ? 'bg-gray-900 text-white' : 'bg-orange-500 text-white'
           }`}
           aria-label={open ? 'Close assistant' : 'Open assistant'}
+          className="h-12 w-12 rounded-2xl shadow-lg dark:shadow-orange-500/15 hover:shadow-xl transition-all hover:-translate-y-0.5 focus-ring"
+          style={{
+            background:
+              'linear-gradient(135deg, rgba(255,88,0,1) 0%, rgba(164,0,90,1) 100%)',
+          }}
         >
           {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
         </button>

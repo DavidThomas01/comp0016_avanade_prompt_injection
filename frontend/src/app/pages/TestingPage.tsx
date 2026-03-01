@@ -102,30 +102,33 @@ export function TestingPage() {
   const [chatByTestId, setChatByTestId] = useState<Record<string, ChatMessage[]>>({});
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [modelType, setModelType] = useState<ModelType>('platform');
-  const [modelId, setModelId] = useState(MODEL_OPTIONS[0]?.id ?? 'gpt-5.2');
-  const [endpoint, setEndpoint] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [envType, setEnvType] = useState<EnvType>('mitigation');
-  const [systemPrompt, setSystemPrompt] = useState('You are a careful, secure assistant.');
-  const [selectedMitigations, setSelectedMitigations] = useState<string[]>([]);
-  const [promptInput, setPromptInput] = useState('');
 
-  const selectedTest = useMemo(
-    () => tests.find(t => t.id === selectedTestId) ?? null,
-    [tests, selectedTestId]
-  );
+  /* ---------------- Load from backend ---------------- */
 
-  const selectedChat = selectedTestId ? chatByTestId[selectedTestId] ?? [] : [];
-
-  const refreshTests = async () => {
+  const refreshAll = async () => {
     setIsLoading(true);
     try {
-      const data = await apiGet<Test[]>('/tests');
-      setTests(data);
-      setSelectedTestId(prev => prev ?? data[0]?.id ?? null);
+      const suitesData = await apiGet<TestSuite[]>('/suites');
+      setSuites(suitesData);
+
+      const testsPairs = await Promise.all(
+        suitesData.map(async s => {
+          const suiteTests = await apiGet<Test[]>(
+            `/tests?suiteId=${encodeURIComponent(s.id)}`
+          );
+          return suiteTests;
+        })
+      );
+
+      const flatTests = testsPairs.flat();
+      setTests(flatTests);
+
+      // Keep selection stable if possible
+      setSelectedTest(prev => {
+        if (!prev) return flatTests[0] ?? null;
+        const stillThere = flatTests.find(t => t.id === prev.id);
+        return stillThere ?? (flatTests[0] ?? null);
+      });
     } finally {
       setIsLoading(false);
     }
@@ -150,25 +153,34 @@ export function TestingPage() {
     if (!canCreateTest) return;
     setIsLoading(true);
     try {
-      const model: ModelSpec =
-        modelType === 'platform'
-          ? { type: 'platform', model_id: modelId }
-          : { type: 'external', endpoint: endpoint.trim(), key: apiKey.trim() };
+      const run = await apiPost<Run>('/runs', {
+        testId: selectedTest.id,
+        promptOverride: promptOverride.trim().length > 0 ? promptOverride.trim() : undefined,
+        activeMitigations: selectedTest.requiredMitigations ?? [],
+        modelConfigOverride: null,
+      });
 
-      const environment: EnvironmentSpec | null =
-        modelType === 'platform'
-          ? {
-              type: envType,
-              system_prompt: systemPrompt.trim(),
-              mitigations: envType === 'mitigation' ? selectedMitigations : [],
-            }
-          : null;
+      setRunResult(run);
+    } catch (e) {
+      console.error(e);
+      alert('Run failed. Check backend logs / Network tab for details.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      const runner: RunnerSpec = {
-        type: 'prompt',
-        context: [],
-      };
+  /* ---------------- Save Current Test ---------------- */
 
+  const canSaveCurrentTest = !!selectedTest && promptOverride.trim().length > 0 && !isLoading;
+
+  const saveCurrentTest = async () => {
+    if (!selectedTest) return;
+
+    const prompt = promptOverride.trim();
+    if (prompt.length === 0) return;
+
+    setIsLoading(true);
+    try {
       const created = await apiPost<Test>('/tests', {
         name: newName.trim(),
         model,
@@ -185,108 +197,161 @@ export function TestingPage() {
     }
   };
 
-  const runTest = async () => {
-    if (!selectedTest || promptInput.trim().length === 0) return;
+  /* ---------------- Delete Test ---------------- */
+  const deleteTest = async (id: string) => {
+    const prevTests = tests;
+    setTests(prev => prev.filter(t => t.id !== id));
+    setSelectedTest(prev => (prev?.id === id ? null : prev));
 
-    const userMessage: ChatMessage = {
-      id: makeId(),
-      role: 'user',
-      content: promptInput.trim(),
-    };
+    try {
+      await apiDelete(`/tests/${encodeURIComponent(id)}`);
+    } catch (e) {
+      setTests(prevTests);
+      console.error(e);
+      alert('Delete failed. The backend did not remove the test.');
+      return;
+    }
 
-    const pendingMessage: ChatMessage = {
-      id: makeId(),
-      role: 'assistant',
-      content: 'Running test...',
-      pending: true,
-    };
+    setSelectedTest(prev => {
+      if (prev && prev.id !== id) return prev;
+      const remaining = prevTests.filter(t => t.id !== id);
+      return remaining[0] ?? null;
+    });
+  };
 
-    setChatByTestId(prev => {
-      const next = { ...prev };
-      const existing = next[selectedTest.id] ?? [];
-      next[selectedTest.id] = [...existing, userMessage, pendingMessage];
+  /* ---------------- Delete Suite ---------------- */
+  const deleteSuite = async (suite: TestSuite) => {
+    const ok = window.confirm(
+      `Delete suite "${suite.name}"?\n\nThis will also delete all tests and runs inside it.`
+    );
+    if (!ok) return;
+
+    const prevSuites = suites;
+    const prevTests = tests;
+    const prevExpanded = expandedSuiteIds;
+
+    const suiteId = suite.id;
+    const remainingSuites = prevSuites.filter(s => s.id !== suiteId);
+    const remainingTests = prevTests.filter(t => t.suiteId !== suiteId);
+
+    setSuites(remainingSuites);
+    setTests(remainingTests);
+
+    setExpandedSuiteIds(prev => {
+      const next = new Set(prev);
+      next.delete(suiteId);
       return next;
     });
 
-    setPromptInput('');
-    setIsRunning(true);
+    setSelectedTest(prev => {
+      if (!prev) return prev;
+      return prev.suiteId === suiteId ? null : prev;
+    });
+
+    setRunResult(null);
+    setPromptOverride('');
+
     try {
-      const result = await apiPost<RunResult>(`/tests/${selectedTest.id}/run`, {
-        role: 'user',
-        content: userMessage.content,
-      });
-
-      setRunResult(result);
-
-      setChatByTestId(prev => {
-        const next = { ...prev };
-        const existing = next[selectedTest.id] ?? [];
-        next[selectedTest.id] = existing.map(msg =>
-          msg.id === pendingMessage.id
-            ? { id: msg.id, role: 'assistant', content: result.output, pending: false }
-            : msg
-        );
-        return next;
-      });
-    } catch (error) {
-      setChatByTestId(prev => {
-        const next = { ...prev };
-        const existing = next[selectedTest.id] ?? [];
-        next[selectedTest.id] = existing.map(msg =>
-          msg.id === pendingMessage.id
-            ? {
-                id: msg.id,
-                role: 'assistant',
-                content: 'Run failed. Check backend logs for details.',
-                pending: false,
-              }
-            : msg
-        );
-        return next;
-      });
-      console.error(error);
-    } finally {
-      setIsRunning(false);
+      await apiDelete(`/suites/${encodeURIComponent(suiteId)}?confirm=true`);
+    } catch (e) {
+      setSuites(prevSuites);
+      setTests(prevTests);
+      setExpandedSuiteIds(prevExpanded);
+      console.error(e);
+      alert('Delete suite failed. The backend did not remove the suite.');
+      return;
     }
+
+    setSelectedTest(prev => {
+      if (prev) return prev;
+      return remainingTests[0] ?? null;
+    });
+  };
+
+  /* ---------------- UI helpers ---------------- */
+
+  const toggleExpandedSuite = (suiteId: string) => {
+    setExpandedSuiteIds(prev => {
+      const next = new Set(prev);
+      if (next.has(suiteId)) next.delete(suiteId);
+      else next.add(suiteId);
+      return next;
+    });
   };
 
   const analysisPassed = runResult ? !runResult.analysis.flagged : null;
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-amber-50 via-slate-50 to-emerald-50 relative overflow-hidden"
-      style={{ fontFamily: '"Fraunces", "Iowan Old Style", "Palatino", serif' }}
-    >
-      <div className="absolute -top-24 -right-20 h-64 w-64 rounded-full bg-amber-200/40 blur-3xl" />
-      <div className="absolute -bottom-24 -left-16 h-72 w-72 rounded-full bg-emerald-200/40 blur-3xl" />
-
-      <div className="relative max-w-6xl mx-auto px-6 py-10">
-        <header className="flex flex-col gap-2 mb-8">
-          <div className="flex items-center gap-2 text-amber-700">
-            <Sparkles className="h-5 w-5" />
-            <span className="text-sm uppercase tracking-[0.2em]">Test Runner Demo</span>
+    <div className="min-h-[calc(100vh-64px)]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+        {/* Header */}
+        <div className="mb-7">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-muted-foreground">
+            <FlaskConical className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+            Backend-driven test runner
           </div>
           <h1 className="text-3xl md:text-4xl font-semibold text-slate-900">
             Build a test, run it, and review the analysis in real time.
           </h1>
-          <p className="text-slate-600 max-w-2xl">
-            Create a test configuration, then chat with the model to see how it responds and
-            whether the response is flagged as a jailbreak or prompt injection.
+          <p className="text-muted-foreground mt-2">
+            Create suites and tests, select mitigations, and run prompts against the backend runner.
           </p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <section className="lg:col-span-1 space-y-6">
-            <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-slate-900">Create Test</h2>
+          {/* ---------------- Left: Suites & Tests ---------------- */}
+          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
+            <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold flex items-center gap-2">
+                    <Folder className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                    Test Suites
+                  </h2>
+                  <div className="text-xs text-muted-foreground mt-1">Folders & tests (persisted)</div>
+                </div>
+
+                <div className="text-[11px] px-3 py-1 rounded-full bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 text-muted-foreground">
+                  {isLoading ? 'Loading…' : `${suites.length} suites`}
+                </div>
+              </div>
+
+              {/* Primary actions */}
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={refreshTests}
-                  className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800"
+                  onClick={() => runSelectedTest()}
+                  disabled={!selectedTest || isLoading}
+                  className={`py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-all focus-ring ${
+                    selectedTest && !isLoading
+                      ? 'bg-orange-600 text-white border-orange-600 hover:shadow-md hover:-translate-y-0.5'
+                      : 'bg-white/40 dark:bg-white/5 text-muted-foreground border-white/60 dark:border-white/10 cursor-not-allowed'
+                  }`}
                 >
-                  <RefreshCcw className="h-4 w-4" />
-                  Refresh
+                  <Play className="w-4 h-4" />
+                  <span className="text-sm font-semibold">Run</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await saveCurrentTest();
+                    } catch (e) {
+                      console.error(e);
+                      alert('Save failed. Check backend logs / Network tab.');
+                    }
+                  }}
+                  disabled={!canSaveCurrentTest}
+                  className={`py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-all focus-ring ${
+                    canSaveCurrentTest
+                      ? 'bg-white/60 dark:bg-white/5 text-foreground border-white/60 dark:border-white/10 hover:bg-white/80 dark:hover:bg-white/10 hover:shadow-sm'
+                      : 'bg-white/40 dark:bg-white/5 text-muted-foreground border-white/60 dark:border-white/10 cursor-not-allowed'
+                  }`}
+                  title={canSaveCurrentTest ? 'Persist current test to backend' : 'Add a prompt override first'}
+                >
+                  <Sparkles className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                  <span className="text-sm font-semibold">Save</span>
                 </button>
               </div>
 
@@ -301,180 +366,207 @@ export function TestingPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1">Model type</label>
-                  <select
-                    value={modelType}
-                    onChange={e => setModelType(e.target.value as ModelType)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            <div className="p-3 space-y-3">
+              {suites.map(suite => {
+                const suiteTests = suiteIdToTests.get(suite.id) ?? [];
+                const isExpanded = expandedSuiteIds.has(suite.id);
+
+                return (
+                  <div
+                    key={suite.id}
+                    className="rounded-3xl border border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 overflow-hidden"
                   >
-                    <option value="platform">Platform model</option>
-                    <option value="external">External model</option>
-                  </select>
-                </div>
-
-                {modelType === 'platform' ? (
-                  <div>
-                    <label className="block text-sm text-slate-700 mb-1">Model id</label>
-                    <select
-                      value={modelId}
-                      onChange={e => setModelId(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                    >
-                      {MODEL_OPTIONS.map(model => (
-                        <option key={model.id} value={model.id}>
-                          {model.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm text-slate-700 mb-1">Endpoint</label>
-                      <input
-                        value={endpoint}
-                        onChange={e => setEndpoint(e.target.value)}
-                        placeholder="https://api.example.com/v1/chat"
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-slate-700 mb-1">API key</label>
-                      <input
-                        value={apiKey}
-                        onChange={e => setApiKey(e.target.value)}
-                        placeholder="sk-..."
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {modelType === 'platform' && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm text-slate-700 mb-1">Environment type</label>
-                      <select
-                        value={envType}
-                        onChange={e => setEnvType(e.target.value as EnvType)}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    <div className="p-4 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpandedSuite(suite.id)}
+                        className="flex items-center gap-2 text-left min-w-0 focus-ring rounded-2xl px-2 py-1 hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
+                        title="Expand/collapse"
                       >
-                        <option value="mitigation">Mitigation stack</option>
-                        <option value="custom">Custom system prompt</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm text-slate-700 mb-1">System prompt</label>
-                      <textarea
-                        value={systemPrompt}
-                        onChange={e => setSystemPrompt(e.target.value)}
-                        rows={3}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                      />
-                    </div>
-
-                    {envType === 'mitigation' && (
-                      <div>
-                        <label className="block text-sm text-slate-700 mb-2">Mitigations</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {MITIGATION_OPTIONS.map(mitigation => (
-                            <button
-                              key={mitigation.id}
-                              type="button"
-                              onClick={() => toggleMitigation(mitigation.id)}
-                              className={`rounded-xl border px-3 py-2 text-xs text-left transition ${
-                                selectedMitigations.includes(mitigation.id)
-                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                                  : 'border-slate-200 bg-white text-slate-600'
-                              }`}
-                            >
-                              {mitigation.label}
-                            </button>
-                          ))}
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm text-foreground truncate">
+                            {suite.name}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {suiteTests.length} test{suiteTests.length === 1 ? '' : 's'}
+                          </div>
                         </div>
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground"
+                          title="Suite details"
+                          onClick={() => {
+                            alert(suite.description || 'No description');
+                          }}
+                        >
+                          <Info className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => openAddTestModal(suite.id)}
+                          className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground hover:text-foreground"
+                          title="Add test"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            deleteSuite(suite);
+                          }}
+                          className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground hover:text-red-700 dark:hover:text-red-400"
+                          title="Delete suite (backend)"
+                          aria-label="Delete suite"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="px-3 pb-3">
+                        {suiteTests.length === 0 ? (
+                          <div className="text-xs text-muted-foreground px-3 py-4 rounded-2xl bg-white/50 dark:bg-white/5 border border-white/60 dark:border-white/10">
+                            No tests yet. Click "+" to add one.
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {suiteTests.map(test => {
+                              const active = selectedTest?.id === test.id;
+
+                              return (
+                                <div
+                                  key={test.id}
+                                  onClick={() => {
+                                    setSelectedTest(test);
+                                    setRunResult(null);
+                                  }}
+                                  className={`group p-3 rounded-2xl cursor-pointer border transition-all ${
+                                    active
+                                      ? 'border-orange-500/40 bg-orange-500/10 dark:bg-orange-500/15'
+                                      : 'border-white/60 dark:border-white/10 bg-white/50 dark:bg-white/5 hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-sm'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="font-semibold text-sm text-foreground truncate">
+                                        {test.name}
+                                      </div>
+                                      <div className="text-[11px] text-muted-foreground mt-1">
+                                        {test.requiredMitigations?.length ?? 0} active mitigations
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        deleteTest(test.id);
+                                      }}
+                                      className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground hover:text-foreground"
+                                      title="Delete (backend)"
+                                      aria-label="Delete test"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={createTest}
-                  disabled={!canCreateTest || isLoading}
-                  className="w-full rounded-xl bg-slate-900 text-white py-2 text-sm disabled:opacity-50"
-                >
-                  Create Test
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateSuiteOpen(true)}
+                className="w-full py-3 rounded-3xl border border-dashed border-white/60 dark:border-white/15 bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 hover:shadow-sm transition-all flex items-center justify-center gap-2 text-muted-foreground focus-ring"
+                title="Create new folder"
+                aria-label="Create folder"
+              >
+                <Plus className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                <span className="text-sm font-semibold">Create suite</span>
+              </button>
             </div>
+          </div>
 
-            <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">Saved Tests</h3>
-              <div className="space-y-2">
-                {tests.length === 0 && (
-                  <div className="text-sm text-slate-500">No tests yet. Create one to begin.</div>
-                )}
-                {tests.map(test => (
-                  <button
-                    key={test.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedTestId(test.id);
-                      setRunResult(null);
-                    }}
-                    className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
-                      test.id === selectedTestId
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
-                    }`}
-                  >
-                    <div className="font-medium">{test.name}</div>
-                    <div className="text-xs opacity-80">
-                      {test.model.type === 'platform' ? test.model.model_id : 'External model'}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="lg:col-span-2 space-y-6">
-            <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
+          {/* ---------------- Middle: Mitigations ---------------- */}
+          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
+            <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Test Chat</h2>
-                  <p className="text-sm text-slate-500">
-                    {selectedTest ? selectedTest.name : 'Select a test to begin.'}
+                  <h2 className="font-semibold">Mitigations</h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Highlighted mitigations match the selected test.
                   </p>
                 </div>
-                <div className="text-xs text-slate-500">
-                  {selectedTest ? `Runner: ${selectedTest.runner.type}` : null}
+
+                <div className="text-right">
+                  <div className="text-[11px] text-muted-foreground">Active</div>
+                  <div className="text-sm font-semibold text-foreground">
+                    {activeMitigationCount} / {totalMitigations}
+                  </div>
                 </div>
               </div>
 
-              <div className="h-[360px] overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-4">
-                {selectedChat.length === 0 && (
-                  <div className="text-sm text-slate-500">
-                    Start by sending a prompt. Your conversation will appear here.
-                  </div>
-                )}
-                {selectedChat.map(message => (
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
+                  <span>Coverage</span>
+                  <span>{mitigationPct}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-white/60 dark:bg-white/10 border border-white/60 dark:border-white/10 overflow-hidden">
                   <div
-                    key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${mitigationPct}%`,
+                      background:
+                        'linear-gradient(90deg, rgba(255,88,0,1) 0%, rgba(164,0,90,1) 100%)',
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              {mitigations.map(m => {
+                const active = selectedMitigationSet.has(m.id);
+                return (
+                  <div
+                    key={m.id}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      active
+                        ? 'border-green-500/25 bg-green-500/10 dark:bg-green-500/15'
+                        : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5'
+                    }`}
                   >
-                    <div
-                      className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                        message.role === 'user'
-                          ? 'bg-slate-900 text-white'
-                          : message.pending
-                          ? 'bg-amber-100 text-amber-900'
-                          : 'bg-white border border-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {message.content}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-foreground">{m.name}</div>
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${
+                          active
+                            ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                            : 'bg-gray-900/5 dark:bg-white/5 text-muted-foreground border-gray-900/10 dark:border-white/10'
+                        }`}
+                      >
+                        {active ? 'ACTIVE' : 'INACTIVE'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                      {m.description}
                     </div>
                   </div>
                 ))}
@@ -499,33 +591,89 @@ export function TestingPage() {
               </div>
             </div>
 
-            <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">Analysis</h3>
-              {!runResult && (
-                <div className="text-sm text-slate-500">
-                  Run a prompt to see the analysis summary.
+          {/* ---------------- Right: Run & Prompt ---------------- */}
+          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
+            <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-semibold truncate">
+                    {selectedTest?.name ?? 'Select a test'}
+                  </h2>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Model: <span className="font-semibold text-foreground">{selectedModelLabel}</span>
+                  </div>
                 </div>
-              )}
-              {runResult && (
-                <div
-                  className={`rounded-2xl border px-4 py-4 ${
-                    analysisPassed
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                      : 'border-rose-300 bg-rose-50 text-rose-800'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    {analysisPassed ? (
+
+                {runResult ? (
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full border ${
+                      runResult.passed
+                        ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                        : 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20'
+                    }`}
+                  >
+                    {runResult.passed ? (
                       <CheckCircle2 className="h-4 w-4" />
                     ) : (
-                      <AlertTriangle className="h-4 w-4" />
+                      <XCircle className="h-4 w-4" />
                     )}
-                    {analysisPassed ? 'Pass' : 'Fail'}
+                    {runResult.passed ? 'PASSED' : 'FAILED'}
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-3 py-1 rounded-full bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 text-muted-foreground">
+                    {selectedTest ? 'Ready' : '—'}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <textarea
+                value={promptOverride}
+                onChange={e => setPromptOverride(e.target.value)}
+                placeholder="Enter test prompt (optional override)…"
+                className="w-full h-40 resize-none rounded-2xl border border-white/60 dark:border-white/10 bg-white/60 dark:bg-white/5 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus-ring"
+              />
+
+              <button
+                type="button"
+                onClick={() => runSelectedTest()}
+                disabled={!selectedTest || isLoading}
+                className={`w-full py-3 rounded-2xl text-white flex items-center justify-center gap-2 border transition-all focus-ring ${
+                  selectedTest && !isLoading
+                    ? 'border-orange-600 bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
+                    : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 text-muted-foreground cursor-not-allowed'
+                }`}
+              >
+                <Send className="w-4 h-4" />
+                <span className="font-semibold">{isLoading ? 'Running…' : 'Send'}</span>
+              </button>
+
+              <div className="text-[11px] text-muted-foreground">
+                Backend: <span className="font-semibold text-foreground">{API_BASE}</span>
+              </div>
+
+              {runResult && (
+                <div className="mt-3 rounded-3xl border border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-foreground">Run Result</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      mitigations: <span className="font-semibold text-foreground">{runResult.activeMitigations.length}</span>
+                    </div>
                   </div>
-                  <div className="text-sm mt-2">Score: {runResult.analysis.score.toFixed(2)}</div>
-                  <div className="text-sm mt-2">{runResult.analysis.reason}</div>
-                  <div className="text-xs mt-3 opacity-80">
-                    Started: {runResult.started_at} | Finished: {runResult.finished_at}
+
+                  <div className="p-4 space-y-3">
+                    <div className="text-xs text-muted-foreground">
+                      passed:{' '}
+                      <span className="font-semibold text-foreground">{String(runResult.passed)}</span>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-2">response:</div>
+                      <pre className="text-xs bg-gray-950 text-emerald-100 border border-white/10 rounded-2xl p-4 overflow-auto whitespace-pre-wrap break-words">
+                        {runResult.modelResponse}
+                      </pre>
+                    </div>
                   </div>
                 </div>
               )}
@@ -533,6 +681,193 @@ export function TestingPage() {
           </section>
         </div>
       </div>
+
+      {/* ---------------- Create Suite Modal ---------------- */}
+      <Dialog open={isCreateSuiteOpen} onOpenChange={setIsCreateSuiteOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Create Suite</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <input
+              value={newSuiteName}
+              onChange={e => setNewSuiteName(e.target.value)}
+              placeholder="Suite name"
+              className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm focus-ring"
+            />
+            <textarea
+              value={newSuiteDescription}
+              onChange={e => setNewSuiteDescription(e.target.value)}
+              placeholder="Description (optional)"
+              className="w-full h-24 px-4 py-3 rounded-2xl border border-border bg-background text-sm resize-none focus-ring"
+            />
+          </div>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setIsCreateSuiteOpen(false)}
+              className="px-4 py-2 rounded-2xl border border-border bg-background hover:bg-accent transition-colors focus-ring"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await createSuite();
+                } catch (e) {
+                  console.error(e);
+                  alert('Create suite failed. Check backend logs.');
+                }
+              }}
+              disabled={!canCreateSuite}
+              className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
+                canCreateSuite
+                  ? 'bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
+                  : 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
+              }`}
+            >
+              Create
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------------- Add Test Modal ---------------- */}
+      <Dialog open={isAddTestOpen} onOpenChange={setIsAddTestOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Test</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <input
+              value={newTestTitle}
+              onChange={e => setNewTestTitle(e.target.value)}
+              placeholder="Test name"
+              className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm focus-ring"
+            />
+
+            <Tabs value={addTestTab} onValueChange={v => setAddTestTab(v as AddTestTab)}>
+              <TabsList className="w-full bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10">
+                <TabsTrigger value="existing" className="flex-1">
+                  Existing model
+                </TabsTrigger>
+                <TabsTrigger value="custom" className="flex-1">
+                  Custom model
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="existing">
+                <select
+                  value={newTestModelId}
+                  onChange={e => setNewTestModelId(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm mt-2 focus-ring"
+                >
+                  {AI_MODELS.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Uses backend mock provider for now (no real API calls yet).
+                </p>
+              </TabsContent>
+
+              <TabsContent value="custom">
+                <input
+                  type="password"
+                  value={newTestApiKey}
+                  onChange={e => setNewTestApiKey(e.target.value)}
+                  placeholder="API key"
+                  className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm mt-2 focus-ring"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  The backend should not log or persist API keys. (Currently runs are mocked.)
+                </p>
+              </TabsContent>
+            </Tabs>
+
+            <div>
+              <div className="text-sm font-semibold mb-2">Mitigations implemented</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {mitigations.map(m => {
+                  const active = newTestMitigations.includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggleNewTestMitigation(m.id)}
+                      className={`p-4 rounded-2xl border text-left transition-all focus-ring ${
+                        active
+                          ? 'border-green-500/25 bg-green-500/10 dark:bg-green-500/15'
+                          : 'border-white/60 dark:border-white/10 bg-white/50 dark:bg-white/5 hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-foreground">{m.name}</div>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${
+                            active
+                              ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                              : 'bg-gray-900/5 dark:bg-white/5 text-muted-foreground border-gray-900/10 dark:border-white/10'
+                          }`}
+                        >
+                          {active ? 'ON' : 'OFF'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-2">
+                        {m.description}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="text-xs text-muted-foreground mt-2">
+                You can create a test with <span className="font-semibold text-foreground">0 mitigations</span>.
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => {
+                setIsAddTestOpen(false);
+                setTargetSuiteId(null);
+              }}
+              className="px-4 py-2 rounded-2xl border border-border bg-background hover:bg-accent transition-colors focus-ring"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await createTestFromModal();
+                } catch (e) {
+                  console.error(e);
+                  alert('Add test failed. Check backend logs.');
+                }
+              }}
+              disabled={!canCreateTest}
+              className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
+                canCreateTest
+                  ? 'bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
+                  : 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
+              }`}
+            >
+              Add test
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

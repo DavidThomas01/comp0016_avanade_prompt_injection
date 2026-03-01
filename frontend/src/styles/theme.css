@@ -60,6 +60,8 @@
   --destructive-foreground: oklch(0.637 0.237 25.331);
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
+  --input-background: oklch(0.205 0 0);
+  --switch-background: oklch(0.35 0 0);
   --ring: oklch(0.439 0 0);
   --font-weight-medium: 500;
   --font-weight-normal: 400;
@@ -117,6 +119,23 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Avanade brand palette — overrides Tailwind orange with Avanade orange */
+  --color-orange-50: #FFF3EB;
+  --color-orange-100: #FFE2CC;
+  --color-orange-200: #FFC599;
+  --color-orange-300: #FFA366;
+  --color-orange-400: #FF7D33;
+  --color-orange-500: #FF5800;
+  --color-orange-600: #E34E00;
+  --color-orange-700: #C44300;
+  --color-orange-800: #9E3600;
+  --color-orange-900: #7A2B00;
+  --color-orange-950: #4D1B00;
+
+  /* Avanade magenta accent */
+  --color-avanade: #FF5800;
+  --color-avanade-magenta: #A4005A;
 }
 
 @layer base {

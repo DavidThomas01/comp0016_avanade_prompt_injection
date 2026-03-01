@@ -50,7 +50,6 @@ export async function mockKbAnswer(question: string): Promise<ChatAssistantReply
       const searchable = [
         vulnerability.name,
         vulnerability.description,
-        vulnerability.code,
         vulnerability.tags.join(' '),
         vulnerability.nuggets.join(' '),
         vulnerability.technicalExplanation.join(' '),
