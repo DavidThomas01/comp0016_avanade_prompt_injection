@@ -2,18 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from domain.providers.base_provider import Message, ModelRequest, ModelResponse
-from app.provider_router import ProviderRouter
+from domain.providers.base_provider import Message, ModelRequest
+from app.routers.provider_router import ProviderRouter
 from infra.config.mitigations import MITIGATION_REGISTRY
 
+from core.exceptions import EnhancementValidationError
+
+
 logger = logging.getLogger(__name__)
-
-
-class EnhancementValidationError(Exception):
-    """Raised when prompt enhancement fails validation after all retries."""
-    pass
 
 
 async def improve_prompt_structure(
@@ -46,8 +44,7 @@ async def improve_prompt_structure(
     request = ModelRequest(
         model="gpt-5-nano",
         messages=[Message(role="system", content=improvement_system_message),
-                  Message(role="user", content=original_prompt)],
-        temperature=1,
+                  Message(role="user", content=original_prompt)]
     )
     
     response = await provider_router.generate(request)
@@ -146,7 +143,6 @@ Respond with JSON ONLY (no markdown, no extra text):
             Message(role="system", content=verification_system_message),
             Message(role="user", content=verification_user_message)
         ],
-        temperature=1,
     )
     
     response = await provider_router.generate(request)

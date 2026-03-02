@@ -4,9 +4,8 @@ from domain.providers import Message
 from domain.tests import *
 from infra.config.models import MODEL_REGISTRY
 from infra.config.mitigations import MITIGATION_REGISTRY
-from infra.tests.runners import *
-from infra.persistance.repositories import TestRepository
-from app.runner_router import RunnerRouter
+from infra.persistance.repositories.test_repository import TestRepository
+from app.routers.runner_router import RunnerRouter
 
 from .dto import *
 
@@ -116,19 +115,23 @@ class TestService():
         
         if not test:
             raise NotFoundError("test not found")
+        
+        if test.runner.type == RunnerType.PROMPT:
+            self._update_context_with_message(db, test, message)
              
-        # FLAG: THIS IS CURRENTLY RETURNING A COROUTINE   
         result = await self.runner_router.run(test, message)
         
         if test.runner.type == RunnerType.PROMPT:
-            self._update_context_with_response(db, test, message, result.output)
+            self._update_context_with_response(db, test, result.output)
         
         return result 
     
     
-    def _update_context_with_response(self, db: Session, test: Test, message: Message, response: str):
-        test.runner.context.extend([
-            message,
-            Message(role="system", content=response)
-        ])
+    def _update_context_with_message(self, db: Session, test: Test, message: Message):
+        test.runner.context.append(message)
+        self.repo.update(db, test)
+        
+    
+    def _update_context_with_response(self, db: Session, test: Test, response: str):
+        test.runner.context.append(Message(role="system", content=response))
         self.repo.update(db, test)
