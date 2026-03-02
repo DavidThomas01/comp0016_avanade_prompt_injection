@@ -24,3 +24,7 @@ class UnknownRunner(AppError):
 
 class NotFoundError(AppError):
     pass
+
+
+class EnhancementValidationError(Exception):
+    pass
