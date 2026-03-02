@@ -4,7 +4,7 @@ import logging
 from typing import Optional, List
 from domain.providers import Message, ModelResponse
 from domain.mitigations import MitigationAnalysis
-from app.provider_router import ProviderRouter
+from app.routers.provider_router import ProviderRouter
 from domain.providers import ModelRequest
 
 

@@ -5,7 +5,7 @@ from dataclasses import asdict
 from domain.tests import *
 from domain.providers import Message
 
-from .models import TestModel
+from ..models.test_models import TestModel
 
 
 class TestRepository:

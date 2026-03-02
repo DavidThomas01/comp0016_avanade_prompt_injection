@@ -1,6 +1,6 @@
 from domain.tests import *
 from domain.providers import *
-from app.provider_router import ProviderRouter
+from app.routers.provider_router import ProviderRouter
 from typing import Optional, List
 from datetime import datetime
 from domain.mitigations import *

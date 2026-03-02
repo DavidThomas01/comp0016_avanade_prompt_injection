@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, DateTime
 from sqlalchemy.dialects.postgresql import JSON
-from .db import Base
+from ..db import Base
 
 class TestModel(Base):
     __tablename__ = "tests"

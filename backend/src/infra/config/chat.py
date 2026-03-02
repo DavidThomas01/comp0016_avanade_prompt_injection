@@ -2,9 +2,6 @@
 
 DEFAULT_MODEL: str = "gpt-5-nano"
 
-# gpt-5-nano only supports the default temperature (1).
-DEFAULT_TEMPERATURE: float = 1
-
 # Maximum agent iterations before forcing a final answer.
 MAX_AGENT_TURNS: int = 6
 
