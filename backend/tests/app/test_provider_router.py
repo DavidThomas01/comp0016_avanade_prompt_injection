@@ -2,8 +2,8 @@
 import asyncio
 import pytest
 
-import app.provider_router as router_module
-from app.provider_router import ProviderRouter
+import app.routers.provider_router as router_module
+from app.routers import ProviderRouter
 from domain.providers.base_provider import ModelRequest, Message, ModelResponse
 
 from core.exceptions import UnknownModel, UnknownProvider

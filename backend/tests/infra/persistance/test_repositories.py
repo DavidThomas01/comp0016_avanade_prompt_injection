@@ -2,8 +2,8 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime
 from sqlalchemy.orm import Session
-from infra.persistance.repositories import TestRepository
-from infra.persistance.models import TestModel
+from infra.persistance.repositories.test_repository import TestRepository
+from infra.persistance.models.test_models import TestModel
 from domain.tests.test import Test
 from domain.tests.model_spec import ModelSpec
 from domain.tests.environment_spec import EnvironmentSpec
