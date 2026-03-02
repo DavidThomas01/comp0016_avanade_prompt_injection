@@ -4,14 +4,13 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from api.deps import get_db_session, get_provider_router
+from api.deps import get_db, get_provider_router
 from api.schemas.prompt_enhancers import PromptEnhancementCreate, PromptEnhancementOut
-from infra.persistence.models import PromptEnhancement
-from app.provider_router import ProviderRouter
-from app.services.prompt_enhancer_service import (
-    enhance_prompt_with_validation,
-    EnhancementValidationError,
-)
+from infra.persistance.models.prompt_enhancer_models import PromptEnhancement
+from app.routers.provider_router import ProviderRouter
+from app.enhancer.prompt_enhancer_service import enhance_prompt_with_validation
+
+from core.exceptions import EnhancementValidationError
 
 router = APIRouter(prefix="/api/prompt-enhancements", tags=["prompt_enhancements"])
 
@@ -19,7 +18,7 @@ router = APIRouter(prefix="/api/prompt-enhancements", tags=["prompt_enhancements
 @router.post("", response_model=PromptEnhancementOut, status_code=201)
 async def enhance_prompt(
     payload: PromptEnhancementCreate,
-    session: Session = Depends(get_db_session),
+    session: Session = Depends(get_db),
     router_dep: ProviderRouter = Depends(get_provider_router),
 ) -> PromptEnhancementOut:
     """

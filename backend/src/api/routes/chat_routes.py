@@ -10,8 +10,8 @@ from fastapi.responses import StreamingResponse
 
 from api.deps import get_provider_router
 from api.schemas.chat import ChatRequest
-from app.chat.service import ChatService, SSEEvent, SSEDeltaEvent, SSEDoneEvent
-from app.provider_router import ProviderRouter
+from app.chat.chat_service import ChatService, SSEEvent, SSEDeltaEvent, SSEDoneEvent
+from app.routers.provider_router import ProviderRouter
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
