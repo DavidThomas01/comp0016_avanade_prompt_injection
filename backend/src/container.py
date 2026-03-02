@@ -1,6 +1,6 @@
 from app.tests import TestService
-from app.runner_router import RunnerRouter
-from infra.persistance.repositories import TestRepository
+from app.routers.runner_router import RunnerRouter
+from infra.persistance.repositories.test_repository import TestRepository
 
 
 class Container:
