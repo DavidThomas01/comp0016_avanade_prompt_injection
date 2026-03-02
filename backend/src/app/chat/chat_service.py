@@ -5,15 +5,14 @@ from dataclasses import dataclass
 from typing import AsyncGenerator, Dict, List, Literal
 
 from app.chat.prompts import SYSTEM_PROMPT
-from app.provider_router import ProviderRouter
+from app.routers.provider_router import ProviderRouter
 from domain.knowledge.search import search_knowledge_base
 from domain.knowledge.vulnerabilities import VULNERABILITIES
 from domain.knowledge.mitigations import MITIGATIONS
 from domain.providers.base_provider import Message, ModelRequest
-from infra.config.chat_config import (
+from infra.config.chat import (
     CHUNK_SIZE,
     DEFAULT_MODEL,
-    DEFAULT_TEMPERATURE,
     MAX_HISTORY_MESSAGES,
     MAX_TOKENS,
 )
@@ -109,7 +108,6 @@ class ChatService:
             model=model,
             messages=messages,
             system_prompt=SYSTEM_PROMPT,
-            temperature=DEFAULT_TEMPERATURE,
             metadata={"max_completion_tokens": MAX_TOKENS},
         )
 
