@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Sparkles, ArrowRight, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { vulnerabilities } from '../data/vulnerabilities';
 
@@ -7,7 +7,7 @@ export function HomePage() {
     <div className="min-h-[calc(100vh-64px)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
         {/* Hero */}
-        <div className="glass-strong rounded-3xl p-7 sm:p-10 border border-white/60 dark:border-white/10 shadow-sm">
+        <div className="glass-strong rounded-3xl p-7 sm:p-10 border border-white/60 dark:border-white/10 shadow-sm mb-10">
           <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-muted-foreground">
@@ -68,26 +68,10 @@ export function HomePage() {
               </div>
             </div>
           </div>
-
-          {/* Right Section - How It Works */}
-          <div className="lg:col-span-1">
-            <div className="bg-white border border-gray-200 rounded-lg p-6 sticky top-6">
-              <h2 className="text-xl mb-4">How Prompt Injection Works</h2>
-              
-              <div className="space-y-4">
-                {/* Step 1 */}
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold text-sm">
-                    1
-                  </div>
-                  <div>
-                    <h3 className="font-medium mb-1">User Input</h3>
-                    <p className="text-sm text-gray-600">Attacker crafts malicious prompt</p>
-                  </div>
-                </div>
+        </div>
 
         {/* Catalogue */}
-        <div className="mt-10">
+        <div>
           <div className="flex items-end justify-between gap-4 mb-4">
             <div>
               <h2 className="text-xl font-semibold">Vulnerability Catalogue</h2>
@@ -133,8 +117,8 @@ export function HomePage() {
 
                   <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors mt-1" />
                 </div>
-              </div>
-            </div>
+              </Link>
+            ))}
           </div>
         </div>
       </div>

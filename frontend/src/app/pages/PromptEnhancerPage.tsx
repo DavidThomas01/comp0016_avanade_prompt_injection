@@ -241,10 +241,9 @@ export function PromptEnhancerPage() {
                         )}
                       </div>
                     </div>
-                  </div>
-                </div>
-              ))}
-              
+                  </button>
+              )})}  
+
               <div className="mt-6 p-3 bg-gray-100 rounded">
                 <div className="text-sm font-medium mb-2">Selected Mitigations</div>
                 <div className="text-2xl font-bold text-orange-500">

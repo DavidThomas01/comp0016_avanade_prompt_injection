@@ -72,39 +72,51 @@
 /* ── Glass surfaces ──────────────────────────────────── */
 
 .glass {
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(201, 211, 226, 0.5);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow:
-    0 10px 30px rgba(2, 6, 23, 0.08),
-    0 1px 0 rgba(255, 255, 255, 0.6) inset;
-}
-
-.dark .glass {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.25),
-    0 1px 0 rgba(255, 255, 255, 0.04) inset;
-}
-
-.glass-strong {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  box-shadow:
-    0 18px 44px rgba(2, 6, 23, 0.10),
+    0 10px 30px rgba(2, 6, 23, 0.06),
     0 1px 0 rgba(255, 255, 255, 0.7) inset;
 }
 
-.dark .glass-strong {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+.dark .glass {
+  background: rgba(30, 35, 45, 0.85);
+  border: 1px solid rgba(100, 120, 150, 0.3);
   box-shadow:
-    0 18px 44px rgba(0, 0, 0, 0.30),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    0 10px 30px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.glass-strong {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(248, 250, 252, 0.92) 50%,
+    rgba(240, 245, 250, 0.90) 100%
+  );
+  border: 1px solid rgba(201, 211, 226, 0.6);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 18px 44px rgba(2, 6, 23, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    inset 0 1px 3px rgba(255, 88, 0, 0.05);
+}
+
+.dark .glass-strong {
+  background: linear-gradient(
+    135deg,
+    rgba(30, 35, 45, 0.95) 0%,
+    rgba(25, 30, 40, 0.92) 50%,
+    rgba(20, 25, 35, 0.90) 100%
+  );
+  border: 1px solid rgba(100, 120, 150, 0.4);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    inset 0 1px 3px rgba(255, 88, 0, 0.08);
 }
 
 .glass-chat-reply {

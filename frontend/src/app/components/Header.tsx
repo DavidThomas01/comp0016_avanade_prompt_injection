@@ -18,6 +18,14 @@ export function Header() {
     return location.pathname === path;
   };
   
+  const items: NavItem[] = [
+    { to: '/', label: 'Vulnerabilities', isActive },
+    { to: '/testing', label: 'Testing', isActive },
+    { to: '/mitigations', label: 'Mitigations', isActive },
+    { to: '/prompt-enhancer', label: 'Enhancer', isActive },
+    { to: '/security-knowledge-assistant', label: 'Knowledge', isActive },
+  ];
+  
   return (
     <header className="sticky top-0 z-40 border-b border-white/60 dark:border-white/10 bg-white/70 dark:bg-gray-950/70 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">

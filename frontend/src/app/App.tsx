@@ -7,6 +7,7 @@ import { ChatWidget } from './assistant/ChatWidget';
 import { HomePage } from './pages/HomePage';
 import { VulnerabilityPage } from './pages/VulnerabilityPage';
 import { TestingPage } from './pages/TestingPage';
+import { MitigationsPage } from './pages/MitigationsPage';
 import { PromptEnhancerPage } from './pages/PromptEnhancerPage';
 import { SecurityKnowledgeAssistantPage } from './pages/SecurityKnowledgeAssistantPage';
 

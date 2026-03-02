@@ -1,3 +1,4 @@
+import { Sparkles } from 'lucide-react';
 import { ChatPanel } from '../assistant/ChatPanel';
 
 export function SecurityKnowledgeAssistantPage() {
