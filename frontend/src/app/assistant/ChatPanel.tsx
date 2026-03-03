@@ -217,6 +217,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
           )}
           {variant === 'compact' && (
             <button
+              type="button"
               onClick={openFullView}
               className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
               title="Open in full view"
@@ -226,6 +227,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
           )}
           {variant === 'compact' && onClose && (
             <button
+              type="button"
               onClick={onClose}
               className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
               aria-label="Close assistant"
@@ -236,6 +238,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
         </div>
       </div>
 
+      {/* Messages */}
       <div className="flex-1 min-h-0">
         <div
           ref={scrollRef}

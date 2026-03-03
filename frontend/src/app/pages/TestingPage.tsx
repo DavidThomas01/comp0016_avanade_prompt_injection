@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { CheckCircle2, AlertTriangle, Send, RefreshCcw, User, Bot, Settings, Trash2 } from 'lucide-react';
 import { cn } from '../components/ui/utils';
+import { MarkdownRenderer } from '../assistant/MarkdownRenderer';
 
 type ModelType = 'platform' | 'external';
 type EnvType = 'mitigation' | 'custom';
@@ -358,29 +359,6 @@ export function TestingPage() {
     }
   };
 
-  // Format message content with line breaks, bold text, and proper spacing
-  const formatMessageContent = (content: string) => {
-    const lines = content.split('\n');
-    
-    return (
-      <div className="whitespace-pre-wrap break-words">
-        {lines.map((line, idx) => {
-          const segments = line.split(/(\*\*[^*]+\*\*)/).map((part, segIdx) => {
-            if (part && part.startsWith('**') && part.endsWith('**')) {
-              return <strong key={segIdx} className="font-semibold">{part.slice(2, -2)}</strong>;
-            }
-            return <span key={segIdx}>{part}</span>;
-          });
-          return (
-            <div key={idx}>
-              {segments.length > 0 ? segments : <br />}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-[calc(100vh-64px)] bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
@@ -602,7 +580,11 @@ export function TestingPage() {
                             <div className="font-semibold mb-1 text-xs uppercase opacity-75">
                               {msg.role === 'user' ? 'You' : 'Assistant'}
                             </div>
-                            {formatMessageContent(msg.content)}
+                            {msg.role === 'assistant' ? (
+                              <MarkdownRenderer content={msg.content} />
+                            ) : (
+                              <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                            )}
                             {msg.pending && <span className="animate-pulse"> ...</span>}
                           </div>
                           {msg.role === 'user' && (
