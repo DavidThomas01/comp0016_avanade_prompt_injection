@@ -80,5 +80,3 @@ async def run_test(test_id: str, request: RunTestRequest, db: Session = Depends(
         raise HTTPException(status_code=404, detail=str(e))
     except InvalidModelConfiguration as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
-    
