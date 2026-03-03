@@ -6,7 +6,7 @@ from datetime import datetime
 from domain.mitigations import *
 from infra.config.mitigations import MITIGATION_REGISTRY
 from infra.tests.analyzers import PromptTestAnalyser
-from core.exceptions import UnknownMitigation
+from core.exceptions import UnknownMitigation, UnsafePromptError
 
 
 class PromptRunner(TestRunner):
@@ -72,7 +72,10 @@ class PromptRunner(TestRunner):
             system_prompt = test.environment.system_prompt,
         )
         
-        return await provider.generate(request)
+        try:
+            return await provider.generate(request)
+        except UnsafePromptError:
+            return ModelResponse("Request triggered Azure OpenAI's content filter. Please modify your prompt and try again.")
         
         
     def _run_post_output_mitigations(self, mitigations, response, context):

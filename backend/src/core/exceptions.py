@@ -28,3 +28,7 @@ class NotFoundError(AppError):
 
 class EnhancementValidationError(Exception):
     pass
+
+
+class UnsafePromptError(Exception):
+    pass

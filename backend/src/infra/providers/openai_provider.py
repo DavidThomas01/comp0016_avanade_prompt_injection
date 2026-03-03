@@ -6,6 +6,8 @@ import httpx
 from domain.providers.base_provider import ModelProvider, ModelRequest, ModelResponse, Message
 from infra.config.models import MODEL_REGISTRY
 
+from core.exceptions import UnsafePromptError
+
 
 class OpenAIProvider(ModelProvider):
 	def __init__(self, timeout_seconds: float = 60.0) -> None:
@@ -42,7 +44,7 @@ class OpenAIProvider(ModelProvider):
 			response = await client.post(config.endpoint, json=payload, headers=headers)
 
 		if response.status_code >= 400:
-			raise RuntimeError(f"OpenAI provider error {response.status_code}: {response.text}")
+			raise UnsafePromptError(f"OpenAI provider error {response.status_code}: {response.text}")
 
 		data = response.json()
 		text = self._extract_text(data)
