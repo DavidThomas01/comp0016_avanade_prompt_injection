@@ -89,3 +89,19 @@ MODEL_REGISTRY = {
         display_name="mistral-small-2503"
     )
 }
+
+
+def get_models() -> dict:
+    """Get all available models for the frontend."""
+    return {
+        model_id: {
+            "id": model_id,
+            "label": config.display_name,
+        }
+        for model_id, config in MODEL_REGISTRY.items()
+    }
+
+
+def get_model_config(model_id: str) -> ModelConfig | None:
+    """Get a specific model configuration."""
+    return MODEL_REGISTRY.get(model_id)
