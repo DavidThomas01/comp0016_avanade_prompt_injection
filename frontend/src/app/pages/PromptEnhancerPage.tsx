@@ -176,7 +176,7 @@ export function PromptEnhancerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-background">
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-muted-foreground">
@@ -244,9 +244,9 @@ export function PromptEnhancerPage() {
                   </button>
               )})}  
 
-              <div className="mt-6 p-3 bg-gray-100 rounded">
-                <div className="text-sm font-medium mb-2">Selected Mitigations</div>
-                <div className="text-2xl font-bold text-orange-500">
+              <div className="mt-6 p-3 bg-gray-100 dark:bg-white/5 rounded border border-transparent dark:border-white/10">
+                <div className="text-sm font-medium mb-2 text-foreground">Selected Mitigations</div>
+                <div className="text-2xl font-bold text-orange-500 dark:text-orange-400">
                   {selectedMitigations.length} / {mitigations.length}
                 </div>
               </div>
@@ -378,7 +378,11 @@ export function PromptEnhancerPage() {
                     </div>
                     
                     {enhancementResult.verificationData.issues.length > 0 && (
-                      <div className="mt-2.5 text-sm">
+                      <div className={`mt-2.5 text-sm ${
+                        enhancementResult.verificationData.verdict === 'PASS'
+                          ? 'text-green-800 dark:text-green-400'
+                          : 'text-red-800 dark:text-red-400'
+                      }`}>
                         <div className="font-medium mb-1">Issues:</div>
                         <ul className="list-disc list-inside space-y-0.5">
                           {enhancementResult.verificationData.issues.map((issue, i) => (
