@@ -26,7 +26,6 @@ class OpenAICompatibleProvider(ModelProvider):
 
 		messages = self._build_messages(request)
 		payload: Dict[str, Any] = {
-			"temperature": request.temperature,
 			"model": config.model_name,
 			"messages": [{"role": m.role, "content": m.content} for m in messages],
 		}

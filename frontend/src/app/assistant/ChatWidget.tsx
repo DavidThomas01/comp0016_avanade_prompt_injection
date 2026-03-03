@@ -16,7 +16,7 @@ export function ChatWidget() {
     >
       <div className="relative">
         {open && (
-          <div className="mb-3">
+          <div className="absolute bottom-full right-0 mb-3">
             <ChatPanel variant="compact" onClose={() => setOpen(false)} />
           </div>
         )}

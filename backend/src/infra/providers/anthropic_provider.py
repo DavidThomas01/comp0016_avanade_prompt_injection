@@ -25,7 +25,6 @@ class AnthropicProvider(ModelProvider):
 		system_prompt, messages = self._build_messages(request)
 		payload: Dict[str, Any] = {
 			"model": config.model_name,
-			"temperature": request.temperature,
 			"messages": [{"role": m.role, "content": m.content} for m in messages],
 			"max_tokens": request.metadata.get("max_tokens", 1024),
 		}

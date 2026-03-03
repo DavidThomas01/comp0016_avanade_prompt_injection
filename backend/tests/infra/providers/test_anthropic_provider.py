@@ -53,8 +53,7 @@ def test_generate_payload_with_system_prompt(monkeypatch):
 		model="claude-sonnet-4-5",
 		messages=[Message(role="user", content="hello")],
 		system_prompt="system-msg",
-		temperature=0.3,
-		metadata={"max_tokens": 77},
+		metadata={"max_tokens": 77}
 	)
 
 	result = run(provider.generate(request))
@@ -67,7 +66,6 @@ def test_generate_payload_with_system_prompt(monkeypatch):
 
 	assert payload["model"] == "claude-sonnet-4-5"
 	assert payload["system"] == "system-msg"
-	assert payload["temperature"] == 0.3
 	assert payload["max_tokens"] == 77
 	assert payload["messages"][0]["role"] == "user"
 	assert headers["x-api-key"] == "test-key"

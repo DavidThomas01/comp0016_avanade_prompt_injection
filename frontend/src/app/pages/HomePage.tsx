@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Shield, Sparkles } from 'lucide-react';
+import { AlertTriangle, Sparkles, ArrowRight, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { vulnerabilities } from '../data/vulnerabilities';
 
@@ -7,7 +7,7 @@ export function HomePage() {
     <div className="min-h-[calc(100vh-64px)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
         {/* Hero */}
-        <div className="glass-strong rounded-3xl p-7 sm:p-10 border border-white/60 dark:border-white/10 shadow-sm">
+        <div className="glass-strong rounded-3xl p-7 sm:p-10 border border-white/60 dark:border-white/10 shadow-sm mb-10">
           <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-muted-foreground">
@@ -71,7 +71,7 @@ export function HomePage() {
         </div>
 
         {/* Catalogue */}
-        <div className="mt-10">
+        <div>
           <div className="flex items-end justify-between gap-4 mb-4">
             <div>
               <h2 className="text-xl font-semibold">Vulnerability Catalogue</h2>

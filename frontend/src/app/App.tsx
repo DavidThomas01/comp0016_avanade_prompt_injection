@@ -1,13 +1,13 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 import { ThemeProvider } from './components/ThemeProvider';
 import { Header } from './components/Header';
 import { ChatWidget } from './assistant/ChatWidget';
-
 import { HomePage } from './pages/HomePage';
 import { VulnerabilityPage } from './pages/VulnerabilityPage';
-import { MitigationsPage } from './pages/MitigationsPage';
 import { TestingPage } from './pages/TestingPage';
+import { MitigationsPage } from './pages/MitigationsPage';
 import { PromptEnhancerPage } from './pages/PromptEnhancerPage';
 import { SecurityKnowledgeAssistantPage } from './pages/SecurityKnowledgeAssistantPage';
 

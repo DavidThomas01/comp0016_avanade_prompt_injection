@@ -133,7 +133,9 @@ export function PromptEnhancerPage() {
   
   const toggleMitigation = (id: string) => {
     setSelectedMitigations(prev =>
-      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
+      prev.includes(id) 
+        ? prev.filter(m => m !== id)
+        : [...prev, id]
     );
   };
   
@@ -165,7 +167,7 @@ export function PromptEnhancerPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
-
+  
   const resetForm = () => {
     setSystemPrompt('');
     setEnhancementResult(null);
@@ -174,8 +176,8 @@ export function PromptEnhancerPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
@@ -189,7 +191,7 @@ export function PromptEnhancerPage() {
             Your prompt will be restructured for clarity, mitigations will be prepended, and the result will be verified.
           </p>
         </div>
-
+        
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Mitigations */}
           <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
@@ -206,7 +208,7 @@ export function PromptEnhancerPage() {
                 </div>
               </div>
             </div>
-
+            
             <div className="p-4 space-y-3">
               {mitigationCards.map((mitigation) => {
                 const active = selectedMitigations.includes(mitigation.id);
@@ -240,8 +242,14 @@ export function PromptEnhancerPage() {
                       </div>
                     </div>
                   </button>
-                );
-              })}
+              )})}  
+
+              <div className="mt-6 p-3 bg-gray-100 rounded">
+                <div className="text-sm font-medium mb-2">Selected Mitigations</div>
+                <div className="text-2xl font-bold text-orange-500">
+                  {selectedMitigations.length} / {mitigations.length}
+                </div>
+              </div>
             </div>
           </div>
 

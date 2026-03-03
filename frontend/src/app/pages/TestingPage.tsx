@@ -1,87 +1,83 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  Info,
-  Plus,
-  Play,
-  Send,
-  Trash2,
-  ChevronDown,
-  CheckCircle2,
-  XCircle,
-  Sparkles,
-  Folder,
-  FlaskConical,
-} from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { CheckCircle2, AlertTriangle, Send, RefreshCcw, User, Bot, Settings, Trash2 } from 'lucide-react';
+import { cn } from '../components/ui/utils';
+import { MarkdownRenderer } from '../assistant/MarkdownRenderer';
 
-import { mitigations } from '../data/mitigations';
+type ModelType = 'platform' | 'external';
+type EnvType = 'mitigation' | 'custom';
+type RunnerType = 'prompt' | 'framework';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '../components/ui/dialog';
-
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
-
-/**
- * Backend-driven types (match /api responses)
- */
-type TestSuite = {
-  id: string;
-  name: string;
-  description?: string;
-  createdAt?: string;
-  updatedAt?: string;
+type Message = {
+  role: string;
+  content: string;
 };
 
-type ModelConfig =
-  | { mode: 'existing'; provider: string; modelId: string }
-  | { mode: 'custom'; provider: string; apiKey: string };
+type ModelSpec = {
+  type: ModelType;
+  model_id?: string | null;
+  endpoint?: string | null;
+  key?: string | null;
+};
+
+type EnvironmentSpec = {
+  type: EnvType;
+  system_prompt: string;
+  mitigations: string[];
+};
+
+type RunnerSpec = {
+  type: RunnerType;
+  context: Message[];
+};
 
 type Test = {
   id: string;
-  suiteId: string;
   name: string;
-  prompt?: string;
-  expectedBehavior?: string;
-  requiredMitigations: string[];
-  modelConfig?: ModelConfig;
-  createdAt?: string;
-  updatedAt?: string;
+  model: ModelSpec;
+  environment?: EnvironmentSpec | null;
+  runner: RunnerSpec;
+  created_at?: string;
 };
 
-type Run = {
+type TestAnalysis = {
+  flagged: boolean;
+  score: number;
+  reason: string;
+};
+
+type RunResult = {
+  output: string;
+  analysis: TestAnalysis;
+  started_at: string;
+  finished_at: string;
+};
+
+type ChatMessage = {
   id: string;
-  testId: string;
-  suiteId: string;
-  promptUsed: string;
-  activeMitigations: string[];
-  modelResponse: string;
-  passed: boolean;
-  createdAt?: string;
+  role: 'user' | 'assistant';
+  content: string;
+  pending?: boolean;
 };
 
-/**
- * API base (Vite)
- * - add frontend/.env: VITE_API_BASE=http://localhost:8080/api
- */
-const API_BASE: string =
-  (import.meta as any)?.env?.VITE_API_BASE ?? 'http://localhost:8080/api';
+const API_BASE = 'http://localhost:8080/api';
 
-const AI_MODELS = [
-  { id: 'gpt-5', label: 'GPT-5' },
-  { id: 'gpt-4o', label: 'GPT-4o' },
-  { id: 'claude-3.5', label: 'Claude 3.5' },
-  { id: 'gemini-1.5', label: 'Gemini 1.5' },
+const MODEL_OPTIONS = [
+  { id: 'gpt-5.2', label: 'gpt-5.2' },
+  { id: 'gpt-5.1', label: 'gpt-5.1' },
+  { id: 'gpt-5-nano', label: 'gpt-5-nano' },
+  { id: 'o4-nano', label: 'o4-nano' },
+  { id: 'claude-sonnet-4-5', label: 'claude-sonnet-4-5' },
+  { id: 'claude-haiku-4-5', label: 'claude-haiku-4-5' },
 ];
 
-async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
+const MITIGATION_OPTIONS = [
+  { id: 'delimiter_tokens', label: 'Delimiter Tokens' },
+  { id: 'input_validation', label: 'Input Validation' },
+  { id: 'pattern_matching', label: 'Pattern Matching' },
+  { id: 'blocklist_filtering', label: 'Blocklist Filtering' },
+  { id: 'output_sanitization', label: 'Output Sanitization' },
+  { id: 'anomaly_detection', label: 'Anomaly Detection' },
+];
 
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -93,873 +89,672 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+async function apiGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 async function apiDelete(path: string): Promise<void> {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+  });
   if (!res.ok) throw new Error(await res.text());
 }
 
-export function TestingPage() {
-  /* ---------------- State ---------------- */
+const makeId = () => `msg_${Math.random().toString(36).slice(2, 10)}`;
 
-  const [suites, setSuites] = useState<TestSuite[]>([]);
+export function TestingPage() {
+  // Tests state
   const [tests, setTests] = useState<Test[]>([]);
   const [selectedTest, setSelectedTest] = useState<Test | null>(null);
+  const [loadingTests, setLoadingTests] = useState(true);
 
-  const [expandedSuiteIds, setExpandedSuiteIds] = useState<Set<string>>(new Set());
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
 
+  // Form state
+  const [newName, setNewName] = useState('');
+  const [modelType, setModelType] = useState<ModelType>('platform');
+  const [modelId, setModelId] = useState(MODEL_OPTIONS[0]?.id ?? 'gpt-5.2');
+  const [endpoint, setEndpoint] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [selectedMitigations, setSelectedMitigations] = useState<string[]>([]);
   const [promptOverride, setPromptOverride] = useState('');
-  const [runResult, setRunResult] = useState<Run | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  /* ---------------- Load from backend ---------------- */
+  // Mitigation editor state
+  const [editingMitigations, setEditingMitigations] = useState<string[]>([]);
+  const [showEditConfirm, setShowEditConfirm] = useState(false);
 
-  const refreshAll = async () => {
+  // Chat scroll ref
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // Load tests on mount
+  useEffect(() => {
+    const loadTests = async () => {
+      try {
+        const data = await apiGet<Test[]>('/tests');
+        setTests(data || []);
+      } catch (error) {
+        console.error('Failed to load tests:', error);
+      } finally {
+        setLoadingTests(false);
+      }
+    };
+    loadTests();
+  }, []);
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages, isLoading]);
+
+  const canCreateTest =
+    newName.trim().length > 0 &&
+    (modelType === 'platform'
+      ? modelId.trim().length > 0
+      : endpoint.trim().length > 0 && apiKey.trim().length > 0);
+
+  const canRunTest = !!selectedTest && promptOverride.trim().length > 0 && !isLoading;
+
+  const createTest = async () => {
+    if (!canCreateTest) return;
+
     setIsLoading(true);
     try {
-      const suitesData = await apiGet<TestSuite[]>('/suites');
-      setSuites(suitesData);
+      const model: ModelSpec =
+        modelType === 'platform'
+          ? { type: 'platform', model_id: modelId }
+          : {
+              type: 'external',
+              endpoint: endpoint.trim(),
+              key: apiKey.trim(),
+            };
 
-      const testsPairs = await Promise.all(
-        suitesData.map(async s => {
-          const suiteTests = await apiGet<Test[]>(
-            `/tests?suiteId=${encodeURIComponent(s.id)}`
-          );
-          return suiteTests;
-        })
-      );
+      // Environment only for platform models
+      let environment: EnvironmentSpec | null = null;
+      if (modelType === 'platform') {
+        const hasSystemPrompt = systemPrompt.trim().length > 0;
+        const hasMitigations = selectedMitigations.length > 0;
+        
+        // Determine env type: system_prompt only if system prompt WITHOUT mitigations
+        const envType: EnvType = (hasSystemPrompt && !hasMitigations) ? 'custom' : 'mitigation';
+        
+        environment = {
+          type: envType,
+          system_prompt: systemPrompt.trim(),
+          mitigations: selectedMitigations,
+        };
+      }
 
-      const flatTests = testsPairs.flat();
-      setTests(flatTests);
+      const runner: RunnerSpec = {
+        type: 'prompt',
+        context: [],
+      };
 
-      // Keep selection stable if possible
-      setSelectedTest(prev => {
-        if (!prev) return flatTests[0] ?? null;
-        const stillThere = flatTests.find(t => t.id === prev.id);
-        return stillThere ?? (flatTests[0] ?? null);
+      const newTest = await apiPost<Test>('/tests', {
+        name: newName.trim(),
+        model,
+        ...(environment && { environment }),
+        runner,
       });
+
+      setTests([...tests, newTest]);
+      setSelectedTest(newTest);
+      setChatMessages([]);
+      setRunResult(null);
+
+      // Reset form
+      setNewName('');
+      setModelType('platform');
+      setModelId(MODEL_OPTIONS[0]?.id ?? 'gpt-5.2');
+      setEndpoint('');
+      setApiKey('');
+      setSystemPrompt('');
+      setSelectedMitigations([]);
+      setPromptOverride('');
+    } catch (error) {
+      console.error('Failed to create test:', error);
+      alert('Failed to create test: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    refreshAll().catch(err => {
-      console.error(err);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const runTest = async () => {
+    if (!canRunTest || !selectedTest) return;
 
-  /* ---------------- Derived ---------------- */
+    const trimmed = promptOverride.trim();
+    setPromptOverride('');
+    
+    setIsLoading(true);
+    const userMessage: ChatMessage = {
+      id: makeId(),
+      role: 'user',
+      content: trimmed,
+      pending: false,
+    };
 
-  const suiteIdToTests = useMemo(() => {
-    const map = new Map<string, Test[]>();
-    for (const t of tests) {
-      const arr = map.get(t.suiteId) ?? [];
-      arr.push(t);
-      map.set(t.suiteId, arr);
+    setChatMessages(prev => [...prev, userMessage]);
+
+    try {
+      const response = await apiPost<RunResult>(`/tests/${selectedTest.id}/run`, {
+        role: 'user',
+        content: trimmed,
+      });
+
+      setRunResult(response);
+
+      const assistantMessage: ChatMessage = {
+        id: makeId(),
+        role: 'assistant',
+        content: response.output,
+        pending: false,
+      };
+
+      setChatMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Test run failed:', error);
+      const errorMessage: ChatMessage = {
+        id: makeId(),
+        role: 'assistant',
+        content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        pending: false,
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
-    return map;
-  }, [tests]);
-
-  const selectedMitigationSet = useMemo(() => {
-    return new Set(selectedTest?.requiredMitigations ?? []);
-  }, [selectedTest]);
-
-  const activeMitigationCount = selectedTest?.requiredMitigations?.length ?? 0;
-  const totalMitigations = mitigations.length;
-  const mitigationPct = totalMitigations > 0 ? Math.round((activeMitigationCount / totalMitigations) * 100) : 0;
-
-  /* ---------------- Create Suite Modal ---------------- */
-
-  const [isCreateSuiteOpen, setIsCreateSuiteOpen] = useState(false);
-  const [newSuiteName, setNewSuiteName] = useState('');
-  const [newSuiteDescription, setNewSuiteDescription] = useState('');
-
-  const canCreateSuite = newSuiteName.trim().length > 0;
-
-  const createSuite = async () => {
-    if (!canCreateSuite) return;
-
-    const created = await apiPost<TestSuite>('/suites', {
-      name: newSuiteName.trim(),
-      description: newSuiteDescription.trim() || undefined,
-    });
-
-    setSuites(prev => [...prev, created]);
-    setExpandedSuiteIds(prev => new Set(prev).add(created.id));
-
-    setIsCreateSuiteOpen(false);
-    setNewSuiteName('');
-    setNewSuiteDescription('');
-
-    // also load tests for it (none) without refetching everything
-    setTests(prev => prev);
   };
 
-  /* ---------------- Add Test Modal ---------------- */
-
-  type AddTestTab = 'existing' | 'custom';
-  const [isAddTestOpen, setIsAddTestOpen] = useState(false);
-  const [targetSuiteId, setTargetSuiteId] = useState<string | null>(null);
-
-  const [newTestTitle, setNewTestTitle] = useState('');
-  const [newTestMitigations, setNewTestMitigations] = useState<string[]>([]);
-  const [addTestTab, setAddTestTab] = useState<AddTestTab>('existing');
-
-  const [newTestModelId, setNewTestModelId] = useState(AI_MODELS[0]?.id ?? 'gpt-5');
-  const [newTestApiKey, setNewTestApiKey] = useState('');
-
-  const canCreateTest =
-    !!targetSuiteId &&
-    newTestTitle.trim().length > 0 &&
-    (addTestTab === 'existing' || newTestApiKey.trim().length > 0);
-
-  const openAddTestModal = (suiteId: string) => {
-    setTargetSuiteId(suiteId);
-    setIsAddTestOpen(true);
-
-    setNewTestTitle('');
-    setNewTestMitigations([]);
-    setAddTestTab('existing');
-    setNewTestModelId(AI_MODELS[0]?.id ?? 'gpt-5');
-    setNewTestApiKey('');
+  const selectTest = async (testId: string) => {
+    try {
+      // Fetch fresh test data from backend
+      const test = await apiGet<Test>(`/tests/${testId}`);
+      
+      setSelectedTest(test);
+      // Load context messages from test (don't trigger any sends)
+      const contextMessages: ChatMessage[] = (test.runner.context || []).map(msg => {
+        const role = (msg.role === 'user' || msg.role === 'assistant') ? msg.role : 'assistant';
+        return {
+          id: makeId(),
+          role: role as 'user' | 'assistant',
+          content: msg.content,
+          pending: false,
+        };
+      });
+      setChatMessages(contextMessages);
+      setRunResult(null);
+      setPromptOverride('');
+      // Initialize mitigation editor with current test's mitigations
+      setEditingMitigations(test.environment?.mitigations || []);
+    } catch (error) {
+      console.error('Failed to load test:', error);
+    }
   };
 
-  const toggleNewTestMitigation = (id: string) => {
-    setNewTestMitigations(prev =>
+  const deleteTest = async (testId: string) => {
+    try {
+      await apiDelete(`/tests/${testId}`);
+      setTests(prev => prev.filter(t => t.id !== testId));
+      if (selectedTest?.id === testId) {
+        setSelectedTest(null);
+        setChatMessages([]);
+        setRunResult(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete test:', error);
+    }
+  };
+
+  const toggleMitigation = (id: string) => {
+    setSelectedMitigations(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
 
-  const createTestFromModal = async () => {
-    if (!canCreateTest || !targetSuiteId) return;
-
-    const modelConfig: ModelConfig =
-      addTestTab === 'existing'
-        ? { mode: 'existing', provider: 'openai', modelId: newTestModelId }
-        : { mode: 'custom', provider: 'custom', apiKey: newTestApiKey.trim() };
-
-    const created = await apiPost<Test>('/tests', {
-      suiteId: targetSuiteId,
-      name: newTestTitle.trim(),
-      requiredMitigations: newTestMitigations, // can be []
-      modelConfig,
-    });
-
-    setTests(prev => [...prev, created]);
-    setSelectedTest(created);
-    setRunResult(null);
-    setPromptOverride('');
-
-    setIsAddTestOpen(false);
-    setTargetSuiteId(null);
-  };
-
-  /* ---------------- Run Current Test ---------------- */
-
-  const runSelectedTest = async () => {
-    if (!selectedTest) return;
-
-    setIsLoading(true);
-    try {
-      const run = await apiPost<Run>('/runs', {
-        testId: selectedTest.id,
-        promptOverride: promptOverride.trim().length > 0 ? promptOverride.trim() : undefined,
-        activeMitigations: selectedTest.requiredMitigations ?? [],
-        modelConfigOverride: null,
-      });
-
-      setRunResult(run);
-    } catch (e) {
-      console.error(e);
-      alert('Run failed. Check backend logs / Network tab for details.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /* ---------------- Save Current Test ---------------- */
-
-  const canSaveCurrentTest = !!selectedTest && promptOverride.trim().length > 0 && !isLoading;
-
-  const saveCurrentTest = async () => {
-    if (!selectedTest) return;
-
-    const prompt = promptOverride.trim();
-    if (prompt.length === 0) return;
-
-    setIsLoading(true);
-    try {
-      const created = await apiPost<Test>('/tests', {
-        suiteId: selectedTest.suiteId,
-        name: selectedTest.name,
-        prompt,
-        requiredMitigations: selectedTest.requiredMitigations ?? [],
-        modelConfig:
-          selectedTest.modelConfig ?? { mode: 'existing', provider: 'openai', modelId: 'gpt-5' },
-      });
-
-      setTests(prev => [...prev, created]);
-      setSelectedTest(created);
-      setRunResult(null);
-      setPromptOverride('');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /* ---------------- Delete Test ---------------- */
-  const deleteTest = async (id: string) => {
-    const prevTests = tests;
-    setTests(prev => prev.filter(t => t.id !== id));
-    setSelectedTest(prev => (prev?.id === id ? null : prev));
-
-    try {
-      await apiDelete(`/tests/${encodeURIComponent(id)}`);
-    } catch (e) {
-      setTests(prevTests);
-      console.error(e);
-      alert('Delete failed. The backend did not remove the test.');
-      return;
-    }
-
-    setSelectedTest(prev => {
-      if (prev && prev.id !== id) return prev;
-      const remaining = prevTests.filter(t => t.id !== id);
-      return remaining[0] ?? null;
-    });
-  };
-
-  /* ---------------- Delete Suite ---------------- */
-  const deleteSuite = async (suite: TestSuite) => {
-    const ok = window.confirm(
-      `Delete suite "${suite.name}"?\n\nThis will also delete all tests and runs inside it.`
+  const toggleEditMitigation = (id: string) => {
+    setEditingMitigations(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
-    if (!ok) return;
+  };
 
-    const prevSuites = suites;
-    const prevTests = tests;
-    const prevExpanded = expandedSuiteIds;
-
-    const suiteId = suite.id;
-    const remainingSuites = prevSuites.filter(s => s.id !== suiteId);
-    const remainingTests = prevTests.filter(t => t.suiteId !== suiteId);
-
-    setSuites(remainingSuites);
-    setTests(remainingTests);
-
-    setExpandedSuiteIds(prev => {
-      const next = new Set(prev);
-      next.delete(suiteId);
-      return next;
-    });
-
-    setSelectedTest(prev => {
-      if (!prev) return prev;
-      return prev.suiteId === suiteId ? null : prev;
-    });
-
-    setRunResult(null);
-    setPromptOverride('');
-
+  const confirmMitigationEdit = async () => {
+    if (!selectedTest) return;
+    
     try {
-      await apiDelete(`/suites/${encodeURIComponent(suiteId)}?confirm=true`);
-    } catch (e) {
-      setSuites(prevSuites);
-      setTests(prevTests);
-      setExpandedSuiteIds(prevExpanded);
-      console.error(e);
-      alert('Delete suite failed. The backend did not remove the suite.');
-      return;
+      setIsLoading(true);
+      await apiPatch(`/tests/${selectedTest.id}`, {
+        environment: {
+          type: selectedTest.environment?.type || 'mitigation',
+          system_prompt: selectedTest.environment?.system_prompt || '',
+          mitigations: editingMitigations,
+        },
+      });
+      
+      // Fetch the updated test
+      const updatedTest = await apiGet<Test>(`/tests/${selectedTest.id}`);
+      setSelectedTest(updatedTest);
+      setTests(tests.map(t => t.id === updatedTest.id ? updatedTest : t));
+      setShowEditConfirm(false);
+    } catch (error) {
+      console.error('Failed to update mitigations:', error);
+    } finally {
+      setIsLoading(false);
     }
-
-    setSelectedTest(prev => {
-      if (prev) return prev;
-      return remainingTests[0] ?? null;
-    });
   };
-
-  /* ---------------- UI helpers ---------------- */
-
-  const toggleExpandedSuite = (suiteId: string) => {
-    setExpandedSuiteIds(prev => {
-      const next = new Set(prev);
-      if (next.has(suiteId)) next.delete(suiteId);
-      else next.add(suiteId);
-      return next;
-    });
-  };
-
-  const selectedModelLabel =
-    selectedTest?.modelConfig?.mode === 'existing'
-      ? selectedTest.modelConfig.modelId
-      : selectedTest?.modelConfig?.mode === 'custom'
-      ? 'custom'
-      : '—';
-
-  /* ---------------- Render ---------------- */
 
   return (
-    <div className="min-h-[calc(100vh-64px)]">
+    <div className="min-h-[calc(100vh-64px)] bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
-        {/* Header */}
-        <div className="mb-7">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-muted-foreground">
-            <FlaskConical className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
-            Backend-driven test runner
-          </div>
-          <h1 className="mt-3 text-3xl font-semibold">
-            <span className="gradient-text">Testing</span>
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Create suites and tests, select mitigations, and run prompts against the backend runner.
+        <header className="mb-10">
+          <h1 className="text-4xl font-bold gradient-text mb-2">Test Prompt Injection</h1>
+          <p className="text-muted-foreground text-lg">
+            Create tests and run them against different models with mitigations
           </p>
-        </div>
+        </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ---------------- Left: Suites & Tests ---------------- */}
-          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
-            <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
-              <div className="flex items-start justify-between gap-3">
+          {/* Left: Test creation & list */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Create Test Form */}
+            <div className="glass-strong p-6 rounded-xl space-y-4">
+              <h2 className="text-xl font-semibold">Create Test</h2>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Test Name</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="e.g., SQL Injection Attack"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Model Type</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={modelType === 'platform'}
+                      onChange={() => setModelType('platform')}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Platform (OpenAI, Anthropic, etc.)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={modelType === 'external'}
+                      onChange={() => setModelType('external')}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">External Model</span>
+                  </label>
+                </div>
+              </div>
+
+              {modelType === 'platform' ? (
                 <div>
-                  <h2 className="font-semibold flex items-center gap-2">
-                    <Folder className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                    Test Suites
-                  </h2>
-                  <div className="text-xs text-muted-foreground mt-1">Folders & tests (persisted)</div>
+                  <label className="block text-sm font-medium mb-1">Select Model</label>
+                  <select
+                    value={modelId}
+                    onChange={e => setModelId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-400 dark:focus:border-orange-500 transition-all"
+                  >
+                    {MODEL_OPTIONS.map(opt => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">API Endpoint</label>
+                    <input
+                      type="text"
+                      value={endpoint}
+                      onChange={e => setEndpoint(e.target.value)}
+                      placeholder="https://api.example.com/v1/..."
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-400 dark:focus:border-orange-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">API Key</label>
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={e => setApiKey(e.target.value)}
+                      placeholder="sk-..."
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-400 dark:focus:border-orange-500 transition-all"
+                    />
+                  </div>
+                </>
+              )}
 
-                <div className="text-[11px] px-3 py-1 rounded-full bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 text-muted-foreground">
-                  {isLoading ? 'Loading…' : `${suites.length} suites`}
-                </div>
-              </div>
+              {modelType === 'platform' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">System Prompt (optional)</label>
+                    <textarea
+                      value={systemPrompt}
+                      onChange={e => setSystemPrompt(e.target.value)}
+                      placeholder="You are a helpful assistant..."
+                      rows={3}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-400 dark:focus:border-orange-500 transition-all"
+                    />
+                  </div>
 
-              {/* Primary actions */}
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => runSelectedTest()}
-                  disabled={!selectedTest || isLoading}
-                  className={`py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-all focus-ring ${
-                    selectedTest && !isLoading
-                      ? 'bg-orange-600 text-white border-orange-600 hover:shadow-md hover:-translate-y-0.5'
-                      : 'bg-white/40 dark:bg-white/5 text-muted-foreground border-white/60 dark:border-white/10 cursor-not-allowed'
-                  }`}
-                >
-                  <Play className="w-4 h-4" />
-                  <span className="text-sm font-semibold">Run</span>
-                </button>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Mitigations (optional)</label>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {MITIGATION_OPTIONS.map(mit => (
+                        <label key={mit.id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedMitigations.includes(mit.id)}
+                            onChange={() => toggleMitigation(mit.id)}
+                            className="w-4 h-4"
+                          />
+                          <span className="text-sm">{mit.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await saveCurrentTest();
-                    } catch (e) {
-                      console.error(e);
-                      alert('Save failed. Check backend logs / Network tab.');
-                    }
-                  }}
-                  disabled={!canSaveCurrentTest}
-                  className={`py-2.5 rounded-2xl flex items-center justify-center gap-2 border transition-all focus-ring ${
-                    canSaveCurrentTest
-                      ? 'bg-white/60 dark:bg-white/5 text-foreground border-white/60 dark:border-white/10 hover:bg-white/80 dark:hover:bg-white/10 hover:shadow-sm'
-                      : 'bg-white/40 dark:bg-white/5 text-muted-foreground border-white/60 dark:border-white/10 cursor-not-allowed'
-                  }`}
-                  title={canSaveCurrentTest ? 'Persist current test to backend' : 'Add a prompt override first'}
-                >
-                  <Sparkles className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                  <span className="text-sm font-semibold">Save</span>
-                </button>
-              </div>
+              <button
+                onClick={createTest}
+                disabled={!canCreateTest || isLoading}
+                className={cn(
+                  'w-full px-4 py-2 rounded-lg font-medium transition-all',
+                  (canCreateTest && !isLoading)
+                    ? 'bg-orange-600 text-white hover:bg-orange-700'
+                    : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
+                )}
+              >
+                {isLoading ? 'Creating...' : 'Create Test'}
+              </button>
             </div>
 
-            <div className="p-3 space-y-3">
-              {suites.map(suite => {
-                const suiteTests = suiteIdToTests.get(suite.id) ?? [];
-                const isExpanded = expandedSuiteIds.has(suite.id);
-
-                return (
-                  <div
-                    key={suite.id}
-                    className="rounded-3xl border border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 overflow-hidden"
-                  >
-                    <div className="p-4 flex items-center justify-between gap-2">
+            {/* Tests List */}
+            {tests.length > 0 && (
+              <div className="glass-strong p-6 rounded-xl space-y-3">
+                <h3 className="font-semibold">Tests ({tests.length})</h3>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {tests.map(test => (
+                    <div key={test.id} className="flex gap-2 items-stretch">
                       <button
-                        type="button"
-                        onClick={() => toggleExpandedSuite(suite.id)}
-                        className="flex items-center gap-2 text-left min-w-0 focus-ring rounded-2xl px-2 py-1 hover:bg-white/60 dark:hover:bg-white/10 transition-colors"
-                        title="Expand/collapse"
+                        onClick={() => selectTest(test.id)}
+                        className={cn(
+                          'flex-1 text-left px-3 py-2 rounded-lg transition-all text-sm hover:opacity-75',
+                          selectedTest?.id === test.id
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-background hover:bg-white/10 dark:hover:bg-white/5 text-foreground'
+                        )}
                       >
-                        <ChevronDown
-                          className={`h-4 w-4 text-muted-foreground transition-transform ${
-                            isExpanded ? 'rotate-180' : ''
-                          }`}
-                        />
-                        <div className="min-w-0">
-                          <div className="font-semibold text-sm text-foreground truncate">
-                            {suite.name}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {suiteTests.length} test{suiteTests.length === 1 ? '' : 's'}
-                          </div>
+                        <div className="font-medium truncate">{test.name}</div>
+                        <div className="text-xs opacity-75">
+                          {test.model.type === 'platform'
+                            ? test.model.model_id
+                            : 'External Model'}
                         </div>
                       </button>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground"
-                          title="Suite details"
-                          onClick={() => {
-                            alert(suite.description || 'No description');
-                          }}
-                        >
-                          <Info className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => openAddTestModal(suite.id)}
-                          className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground hover:text-foreground"
-                          title="Add test"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={e => {
-                            e.stopPropagation();
-                            deleteSuite(suite);
-                          }}
-                          className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground hover:text-red-700 dark:hover:text-red-400"
-                          title="Delete suite (backend)"
-                          aria-label="Delete suite"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="px-3 pb-3">
-                        {suiteTests.length === 0 ? (
-                          <div className="text-xs text-muted-foreground px-3 py-4 rounded-2xl bg-white/50 dark:bg-white/5 border border-white/60 dark:border-white/10">
-                            No tests yet. Click "+" to add one.
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {suiteTests.map(test => {
-                              const active = selectedTest?.id === test.id;
-
-                              return (
-                                <div
-                                  key={test.id}
-                                  onClick={() => {
-                                    setSelectedTest(test);
-                                    setRunResult(null);
-                                  }}
-                                  className={`group p-3 rounded-2xl cursor-pointer border transition-all ${
-                                    active
-                                      ? 'border-orange-500/40 bg-orange-500/10 dark:bg-orange-500/15'
-                                      : 'border-white/60 dark:border-white/10 bg-white/50 dark:bg-white/5 hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-sm'
-                                  }`}
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0">
-                                      <div className="font-semibold text-sm text-foreground truncate">
-                                        {test.name}
-                                      </div>
-                                      <div className="text-[11px] text-muted-foreground mt-1">
-                                        {test.requiredMitigations?.length ?? 0} active mitigations
-                                      </div>
-                                    </div>
-
-                                    <button
-                                      type="button"
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        deleteTest(test.id);
-                                      }}
-                                      className="p-2 rounded-full hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring text-muted-foreground hover:text-foreground"
-                                      title="Delete (backend)"
-                                      aria-label="Delete test"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              <button
-                type="button"
-                onClick={() => setIsCreateSuiteOpen(true)}
-                className="w-full py-3 rounded-3xl border border-dashed border-white/60 dark:border-white/15 bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 hover:shadow-sm transition-all flex items-center justify-center gap-2 text-muted-foreground focus-ring"
-                title="Create new folder"
-                aria-label="Create folder"
-              >
-                <Plus className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                <span className="text-sm font-semibold">Create suite</span>
-              </button>
-            </div>
-          </div>
-
-          {/* ---------------- Middle: Mitigations ---------------- */}
-          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
-            <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold">Mitigations</h2>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Highlighted mitigations match the selected test.
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-[11px] text-muted-foreground">Active</div>
-                  <div className="text-sm font-semibold text-foreground">
-                    {activeMitigationCount} / {totalMitigations}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
-                  <span>Coverage</span>
-                  <span>{mitigationPct}%</span>
-                </div>
-                <div className="h-2 rounded-full bg-white/60 dark:bg-white/10 border border-white/60 dark:border-white/10 overflow-hidden">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${mitigationPct}%`,
-                      background:
-                        'linear-gradient(90deg, rgba(255,88,0,1) 0%, rgba(164,0,90,1) 100%)',
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 space-y-3">
-              {mitigations.map(m => {
-                const active = selectedMitigationSet.has(m.id);
-                return (
-                  <div
-                    key={m.id}
-                    className={`p-4 rounded-2xl border transition-all ${
-                      active
-                        ? 'border-green-500/25 bg-green-500/10 dark:bg-green-500/15'
-                        : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-foreground">{m.name}</div>
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${
-                          active
-                            ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
-                            : 'bg-gray-900/5 dark:bg-white/5 text-muted-foreground border-gray-900/10 dark:border-white/10'
-                        }`}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteTest(test.id);
+                        }}
+                        className="px-1 py-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                        title="Delete test"
                       >
-                        {active ? 'ACTIVE' : 'INACTIVE'}
-                      </span>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                      {m.description}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {loadingTests && (
+              <div className="glass-strong p-6 rounded-xl text-center">
+                <p className="text-sm text-muted-foreground">Loading tests...</p>
+              </div>
+            )}
           </div>
 
-          {/* ---------------- Right: Run & Prompt ---------------- */}
-          <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
-            <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="font-semibold truncate">
-                    {selectedTest?.name ?? 'Select a test'}
-                  </h2>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Model: <span className="font-semibold text-foreground">{selectedModelLabel}</span>
+          {/* Right: Chat & Results */}
+          <div className="lg:col-span-2 space-y-6">
+            {selectedTest && (
+              <>
+                {/* Chat Messages */}
+                <div className="glass-strong p-6 rounded-xl">
+                  <h2 className="text-lg font-semibold mb-4">Test Chat</h2>
+                  <div ref={chatScrollRef} className="h-96 bg-background rounded-lg p-4 overflow-y-auto space-y-4 mb-4 border border-border">
+                    {chatMessages.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-muted-foreground">
+                        Send a prompt to start the test
+                      </div>
+                    ) : (
+                      chatMessages.map(msg => (
+                        <div
+                          key={msg.id}
+                          className={cn(
+                            'flex gap-3',
+                            msg.role === 'user' ? 'justify-end' : 'justify-start'
+                          )}
+                        >
+                          {msg.role === 'assistant' && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 dark:bg-orange-500 flex items-center justify-center">
+                              <Bot className="w-4 h-4 text-white" />
+                            </div>
+                          )}
+                          <div
+                            className={cn(
+                              'max-w-md px-4 py-3 rounded-lg border text-sm',
+                              msg.role === 'user'
+                                ? 'bg-orange-600 text-white border-orange-700 rounded-br-none'
+                                : 'bg-white dark:bg-gray-900 text-foreground border-border rounded-bl-none'
+                            )}
+                          >
+                            <div className="font-semibold mb-1 text-xs uppercase opacity-75">
+                              {msg.role === 'user' ? 'You' : 'Assistant'}
+                            </div>
+                            {msg.role === 'assistant' ? (
+                              <MarkdownRenderer content={msg.content} />
+                            ) : (
+                              <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                            )}
+                            {msg.pending && <span className="animate-pulse"> ...</span>}
+                          </div>
+                          {msg.role === 'user' && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 dark:bg-orange-500 flex items-center justify-center">
+                              <User className="w-4 h-4 text-white" />
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                    {isLoading && (
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 dark:bg-orange-500 flex items-center justify-center">
+                          <Bot className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="max-w-md px-4 py-3 rounded-lg border bg-white dark:bg-gray-900 text-foreground border-border rounded-bl-none">
+                          <div className="font-semibold mb-1 text-xs uppercase opacity-75">Assistant</div>
+                          <div className="flex gap-1">
+                            <span className="w-2 h-2 bg-orange-600 rounded-full animate-bounce"></span>
+                            <span className="w-2 h-2 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
+                            <span className="w-2 h-2 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promptOverride}
+                      onChange={e => setPromptOverride(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey && canRunTest) {
+                          runTest();
+                        }
+                      }}
+                      placeholder="Enter your test prompt..."
+                      className="flex-1 px-3 py-2 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-400 dark:focus:border-orange-500 transition-all"
+                    />
+                    <button
+                      onClick={runTest}
+                      disabled={!canRunTest}
+                      className={cn(
+                        'px-4 py-2 rounded-lg font-medium transition-all',
+                        canRunTest
+                          ? 'bg-orange-600 text-white hover:bg-orange-700'
+                          : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
+                      )}
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
-                {runResult ? (
-                  <span
-                    className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full border ${
-                      runResult.passed
-                        ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
-                        : 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20'
-                    }`}
-                  >
-                    {runResult.passed ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : (
-                      <XCircle className="h-4 w-4" />
-                    )}
-                    {runResult.passed ? 'PASSED' : 'FAILED'}
-                  </span>
-                ) : (
-                  <span className="text-[11px] px-3 py-1 rounded-full bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 text-muted-foreground">
-                    {selectedTest ? 'Ready' : '—'}
-                  </span>
-                )}
-              </div>
-            </div>
+                {/* Analysis Results */}
+                {runResult && (
+                  <div className="glass-strong p-6 rounded-xl space-y-4">
+                    <h2 className="text-lg font-semibold">Analysis Results</h2>
 
-            <div className="p-4 space-y-3">
-              <textarea
-                value={promptOverride}
-                onChange={e => setPromptOverride(e.target.value)}
-                placeholder="Enter test prompt (optional override)…"
-                className="w-full h-40 resize-none rounded-2xl border border-white/60 dark:border-white/10 bg-white/60 dark:bg-white/5 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus-ring"
-              />
-
-              <button
-                type="button"
-                onClick={() => runSelectedTest()}
-                disabled={!selectedTest || isLoading}
-                className={`w-full py-3 rounded-2xl text-white flex items-center justify-center gap-2 border transition-all focus-ring ${
-                  selectedTest && !isLoading
-                    ? 'border-orange-600 bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
-                    : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 text-muted-foreground cursor-not-allowed'
-                }`}
-              >
-                <Send className="w-4 h-4" />
-                <span className="font-semibold">{isLoading ? 'Running…' : 'Send'}</span>
-              </button>
-
-              <div className="text-[11px] text-muted-foreground">
-                Backend: <span className="font-semibold text-foreground">{API_BASE}</span>
-              </div>
-
-              {runResult && (
-                <div className="mt-3 rounded-3xl border border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-foreground">Run Result</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      mitigations: <span className="font-semibold text-foreground">{runResult.activeMitigations.length}</span>
-                    </div>
-                  </div>
-
-                  <div className="p-4 space-y-3">
-                    <div className="text-xs text-muted-foreground">
-                      passed:{' '}
-                      <span className="font-semibold text-foreground">{String(runResult.passed)}</span>
+                    <div
+                      className={cn(
+                        'p-4 rounded-lg flex items-start gap-3',
+                        runResult.analysis.flagged
+                          ? 'bg-red-500/10 dark:bg-red-500/20 border border-red-500/30'
+                          : 'bg-green-500/10 dark:bg-green-500/20 border border-green-500/30'
+                      )}
+                    >
+                      {runResult.analysis.flagged ? (
+                        <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <div className={cn('font-semibold', runResult.analysis.flagged ? 'text-red-700 dark:text-red-400' : 'text-green-700 dark:text-green-400')}>
+                          {runResult.analysis.flagged ? 'Prompt Injection Detected' : 'Safe Prompt'}
+                        </div>
+                        <div className="text-sm opacity-80 mt-1">{runResult.analysis.reason}</div>
+                      </div>
                     </div>
 
                     <div>
-                      <div className="text-xs text-muted-foreground mb-2">response:</div>
-                      <pre className="text-xs bg-gray-950 text-emerald-100 border border-white/10 rounded-2xl p-4 overflow-auto whitespace-pre-wrap break-words">
-                        {runResult.modelResponse}
-                      </pre>
+                      <div className="text-sm font-medium mb-2">Risk Score</div>
+                      <div className="w-full bg-gray-300 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          className={cn(
+                            'h-2 rounded-full transition-all',
+                            runResult.analysis.score > 0.7
+                              ? 'bg-red-600'
+                              : runResult.analysis.score > 0.4
+                              ? 'bg-yellow-600'
+                              : 'bg-green-600'
+                          )}
+                          style={{
+                            width: `${runResult.analysis.score * 100}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {(runResult.analysis.score * 100).toFixed(1)}%
+                      </div>
                     </div>
                   </div>
+                )}
+              </>
+            )}
+
+            {!selectedTest && (
+              <div className="glass-strong p-12 rounded-xl flex items-center justify-center min-h-96">
+                <div className="text-center">
+                  <RefreshCcw className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                  <p className="text-muted-foreground">Create or select a test to get started</p>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* ---------------- Create Suite Modal ---------------- */}
-      <Dialog open={isCreateSuiteOpen} onOpenChange={setIsCreateSuiteOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Create Suite</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <input
-              value={newSuiteName}
-              onChange={e => setNewSuiteName(e.target.value)}
-              placeholder="Suite name"
-              className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm focus-ring"
-            />
-            <textarea
-              value={newSuiteDescription}
-              onChange={e => setNewSuiteDescription(e.target.value)}
-              placeholder="Description (optional)"
-              className="w-full h-24 px-4 py-3 rounded-2xl border border-border bg-background text-sm resize-none focus-ring"
-            />
-          </div>
-
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setIsCreateSuiteOpen(false)}
-              className="px-4 py-2 rounded-2xl border border-border bg-background hover:bg-accent transition-colors focus-ring"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await createSuite();
-                } catch (e) {
-                  console.error(e);
-                  alert('Create suite failed. Check backend logs.');
-                }
-              }}
-              disabled={!canCreateSuite}
-              className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
-                canCreateSuite
-                  ? 'bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
-                  : 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
-              }`}
-            >
-              Create
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ---------------- Add Test Modal ---------------- */}
-      <Dialog open={isAddTestOpen} onOpenChange={setIsAddTestOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Add Test</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <input
-              value={newTestTitle}
-              onChange={e => setNewTestTitle(e.target.value)}
-              placeholder="Test name"
-              className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm focus-ring"
-            />
-
-            <Tabs value={addTestTab} onValueChange={v => setAddTestTab(v as AddTestTab)}>
-              <TabsList className="w-full bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10">
-                <TabsTrigger value="existing" className="flex-1">
-                  Existing model
-                </TabsTrigger>
-                <TabsTrigger value="custom" className="flex-1">
-                  Custom model
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="existing">
-                <select
-                  value={newTestModelId}
-                  onChange={e => setNewTestModelId(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm mt-2 focus-ring"
-                >
-                  {AI_MODELS.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Uses backend mock provider for now (no real API calls yet).
-                </p>
-              </TabsContent>
-
-              <TabsContent value="custom">
-                <input
-                  type="password"
-                  value={newTestApiKey}
-                  onChange={e => setNewTestApiKey(e.target.value)}
-                  placeholder="API key"
-                  className="w-full px-4 py-2.5 rounded-2xl border border-border bg-background text-sm mt-2 focus-ring"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  The backend should not log or persist API keys. (Currently runs are mocked.)
-                </p>
-              </TabsContent>
-            </Tabs>
-
-            <div>
-              <div className="text-sm font-semibold mb-2">Mitigations implemented</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {mitigations.map(m => {
-                  const active = newTestMitigations.includes(m.id);
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => toggleNewTestMitigation(m.id)}
-                      className={`p-4 rounded-2xl border text-left transition-all focus-ring ${
-                        active
-                          ? 'border-green-500/25 bg-green-500/10 dark:bg-green-500/15'
-                          : 'border-white/60 dark:border-white/10 bg-white/50 dark:bg-white/5 hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-foreground">{m.name}</div>
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-1 rounded-full border ${
-                            active
-                              ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
-                              : 'bg-gray-900/5 dark:bg-white/5 text-muted-foreground border-gray-900/10 dark:border-white/10'
-                          }`}
-                        >
-                          {active ? 'ON' : 'OFF'}
-                        </span>
+        {/* Confirmation Modal */}
+        {showEditConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="glass-strong rounded-xl p-6 max-w-sm w-full border border-white/60 dark:border-white/10">
+              <h3 className="text-lg font-semibold mb-2">Update Mitigations?</h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                This will update the mitigation configuration for this test. Are you sure you want to proceed?
+              </p>
+              
+              <div className="space-y-2 mb-6 max-h-48 overflow-y-auto p-3 bg-background rounded border border-border">
+                <p className="text-xs font-medium text-muted-foreground mb-2">New configuration:</p>
+                {editingMitigations.length > 0 ? (
+                  editingMitigations.map(id => {
+                    const label = MITIGATION_OPTIONS.find(m => m.id === id)?.label || id;
+                    return (
+                      <div key={id} className="text-xs text-foreground flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-orange-600" />
+                        {label}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-2">
-                        {m.description}
-                      </div>
-                    </button>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">No mitigations selected</p>
+                )}
               </div>
 
-              <div className="text-xs text-muted-foreground mt-2">
-                You can create a test with <span className="font-semibold text-foreground">0 mitigations</span>.
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowEditConfirm(false)}
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-2 rounded-lg border border-border bg-background text-foreground hover:bg-white/10 dark:hover:bg-white/5 transition-all text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmMitigationEdit}
+                  disabled={isLoading}
+                  className={cn(
+                    'flex-1 px-4 py-2 rounded-lg text-white font-medium text-sm transition-all',
+                    isLoading
+                      ? 'bg-gray-500 cursor-not-allowed'
+                      : 'bg-orange-600 hover:bg-orange-700'
+                  )}
+                >
+                  {isLoading ? 'Updating...' : 'Confirm'}
+                </button>
               </div>
             </div>
           </div>
-
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => {
-                setIsAddTestOpen(false);
-                setTargetSuiteId(null);
-              }}
-              className="px-4 py-2 rounded-2xl border border-border bg-background hover:bg-accent transition-colors focus-ring"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await createTestFromModal();
-                } catch (e) {
-                  console.error(e);
-                  alert('Add test failed. Check backend logs.');
-                }
-              }}
-              disabled={!canCreateTest}
-              className={`px-4 py-2 rounded-2xl text-white transition-all focus-ring ${
-                canCreateTest
-                  ? 'bg-orange-600 hover:shadow-md hover:-translate-y-0.5'
-                  : 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
-              }`}
-            >
-              Add test
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        )}
+      </div>
     </div>
   );
 }

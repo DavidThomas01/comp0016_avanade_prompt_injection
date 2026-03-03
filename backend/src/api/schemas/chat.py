@@ -5,7 +5,7 @@ from typing import List
 
 from pydantic import BaseModel, Field
 
-from infra.config.chat_config import DEFAULT_MODEL
+from infra.config.chat import DEFAULT_MODEL
 
 
 class ChatMessageSchema(BaseModel):

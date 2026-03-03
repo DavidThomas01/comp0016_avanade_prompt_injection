@@ -51,8 +51,7 @@ def test_generate_responses_endpoint_payload(monkeypatch):
 		model="gpt-5.2",
 		messages=[Message(role="user", content="hello")],
 		system_prompt="system-msg",
-		temperature=0.2,
-		metadata={"max_output_tokens": 10},
+		metadata={"max_output_tokens": 10}
 	)
 
 	result = run(provider.generate(request))
@@ -66,7 +65,6 @@ def test_generate_responses_endpoint_payload(monkeypatch):
 	assert "input" in payload
 	assert "messages" not in payload
 	assert payload["model"] == "gpt-5.2"
-	assert payload["temperature"] == 0.2
 	assert payload["max_output_tokens"] == 10
 	assert payload["input"][0]["role"] == "system"
 	assert payload["input"][0]["content"] == "system-msg"
@@ -87,7 +85,6 @@ def test_generate_chat_completions_payload(monkeypatch):
 	request = ModelRequest(
 		model="o4-nano",
 		messages=[Message(role="user", content="hello")],
-		temperature=0.0,
 	)
 
 	result = run(provider.generate(request))

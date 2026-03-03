@@ -52,8 +52,7 @@ def test_generate_payload(monkeypatch):
 		model="llama",
 		messages=[Message(role="user", content="hello")],
 		system_prompt="system-msg",
-		temperature=0.1,
-		metadata={"max_tokens": 12},
+		metadata={"max_tokens": 12}
 	)
 
 	result = run(provider.generate(request))
@@ -65,7 +64,6 @@ def test_generate_payload(monkeypatch):
 	headers = DummyAsyncClient.last_request["headers"]
 
 	assert payload["model"] == "Llama-3.3-70B-Instruct"
-	assert payload["temperature"] == 0.1
 	assert payload["messages"][0]["role"] == "system"
 	assert payload["messages"][0]["content"] == "system-msg"
 	assert payload["max_tokens"] == 12
@@ -82,7 +80,7 @@ def test_missing_model_raises():
 
 def test_provider_mismatch_raises():
 	provider = OpenAICompatibleProvider()
-	request = ModelRequest(model="claude", messages=[Message(role="user", content="hi")])
+	request = ModelRequest(model="claude-sonnet-4-5", messages=[Message(role="user", content="hi")])
 
 	with pytest.raises(ValueError, match="OpenAI-compatible model"):
 		run(provider.generate(request))
