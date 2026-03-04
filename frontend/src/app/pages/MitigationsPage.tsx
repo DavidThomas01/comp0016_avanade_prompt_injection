@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, Code2, Copy, ShieldCheck } from 'lucide-react';
+import { ChevronRight, Code2, Copy, Download, ShieldCheck } from 'lucide-react';
 
 import { mitigations, type CodeLanguage } from '../data/mitigations';
+import { Button } from '../components/ui/button';
+import { exportMitigationPdf } from '../lib/pdf';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../components/ui/dialog';
 
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 
@@ -61,23 +71,71 @@ export function MitigationsPage() {
     }
   };
 
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportLangs, setExportLangs] = useState<CodeLanguage[]>([]);
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const availableImplLangs = useMemo(() => {
+    if (!selected?.codeBased) return [];
+    return (Object.keys(selected.implementations) as CodeLanguage[]).filter(
+      (l) => !!selected.implementations[l],
+    );
+  }, [selected]);
+
+  const allSelected = availableImplLangs.length > 0 && availableImplLangs.every((l) => exportLangs.includes(l));
+
+  const toggleExportLang = (l: CodeLanguage) => {
+    setExportLangs((prev) => (prev.includes(l) ? prev.filter((x) => x !== l) : [...prev, l]));
+  };
+
+  const toggleAll = () => {
+    setExportLangs(allSelected ? [] : [...availableImplLangs]);
+  };
+
+  const openExportDialog = () => {
+    setExportLangs(selected?.codeBased ? [...availableImplLangs] : []);
+    setExportDialogOpen(true);
+  };
+
+  const handleExportPdf = async () => {
+    if (!selected) return;
+    setExportingPdf(true);
+    try {
+      const langs = selected.codeBased && exportLangs.length > 0 ? exportLangs : undefined;
+      await exportMitigationPdf(selected, langs);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+    } finally {
+      setExportingPdf(false);
+      setExportDialogOpen(false);
+    }
+  };
+
   return (
     <div className="min-h-[calc(100vh-64px)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
-        {/* Breadcrumbs */}
-        <nav className="flex items-center space-x-2 text-sm mb-6">
-          <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors focus-ring">
-            Home
-          </Link>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          <span className="text-foreground font-medium">Mitigations</span>
-          {selected ? (
-            <>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-              <span className="text-foreground font-medium">{selected.name}</span>
-            </>
-          ) : null}
-        </nav>
+        {/* Breadcrumbs + Export */}
+        <div className="flex items-center justify-between mb-6">
+          <nav className="flex items-center space-x-2 text-sm">
+            <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors focus-ring">
+              Home
+            </Link>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            <span className="text-foreground font-medium">Mitigations</span>
+            {selected ? (
+              <>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                <span className="text-foreground font-medium">{selected.name}</span>
+              </>
+            ) : null}
+          </nav>
+          {selected && (
+            <Button variant="outline" size="sm" onClick={openExportDialog}>
+              <Download className="w-4 h-4" />
+              Export PDF
+            </Button>
+          )}
+        </div>
 
         <div className="mb-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-muted-foreground">
@@ -250,6 +308,63 @@ export function MitigationsPage() {
             )}
           </div>
         </div>
+
+        <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Export Mitigation PDF</DialogTitle>
+              <DialogDescription>
+                {selected?.codeBased
+                  ? 'Choose which implementation languages to include in the exported report.'
+                  : 'This mitigation has no code implementations. The report will include all other sections.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            {selected?.codeBased && availableImplLangs.length > 0 && (
+              <div className="space-y-3 py-2">
+                <label className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 hover:bg-accent transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-4 w-4 rounded accent-orange-600"
+                  />
+                  <span className="text-sm font-medium">All Languages</span>
+                </label>
+                <div className="border-t border-border" />
+                {LANG_OPTIONS.filter((opt) => availableImplLangs.includes(opt.value)).map((opt) => (
+                  <label
+                    key={opt.value}
+                    className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 hover:bg-accent transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={exportLangs.includes(opt.value)}
+                      onChange={() => toggleExportLang(opt.value)}
+                      className="h-4 w-4 rounded accent-orange-600"
+                    />
+                    <span className="text-sm">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleExportPdf}
+                disabled={exportingPdf || (selected?.codeBased === true && exportLangs.length === 0)}
+                className="bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                {exportingPdf ? 'Generating...' : 'Export'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
