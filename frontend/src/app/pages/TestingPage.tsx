@@ -1,63 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, AlertTriangle, Send, RefreshCcw, User, Bot, Settings, Trash2 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Send, RefreshCcw, User, Bot, Settings, Trash2, Download } from 'lucide-react';
 import { cn } from '../components/ui/utils';
 import { MarkdownRenderer } from '../assistant/MarkdownRenderer';
-
-type ModelType = 'platform' | 'external';
-type EnvType = 'mitigation' | 'custom';
-type RunnerType = 'prompt' | 'framework';
-
-type Message = {
-  role: string;
-  content: string;
-};
-
-type ModelSpec = {
-  type: ModelType;
-  model_id?: string | null;
-  endpoint?: string | null;
-  key?: string | null;
-};
-
-type EnvironmentSpec = {
-  type: EnvType;
-  system_prompt: string;
-  mitigations: string[];
-};
-
-type RunnerSpec = {
-  type: RunnerType;
-  context: Message[];
-};
-
-type Test = {
-  id: string;
-  name: string;
-  model: ModelSpec;
-  environment?: EnvironmentSpec | null;
-  runner: RunnerSpec;
-  created_at?: string;
-};
-
-type TestAnalysis = {
-  flagged: boolean;
-  score: number;
-  reason: string;
-};
-
-type RunResult = {
-  output: string;
-  analysis: TestAnalysis;
-  started_at: string;
-  finished_at: string;
-};
-
-type ChatMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  pending?: boolean;
-};
+import { Button } from '../components/ui/button';
+import { exportTestPdf } from '../lib/pdf';
+import type { ModelType, EnvType, ModelSpec, EnvironmentSpec, RunnerSpec, Test, RunResult, ChatMessage } from '../types/testing';
 
 const API_BASE = 'http://localhost:8080/api';
 
@@ -138,6 +85,9 @@ export function TestingPage() {
   // Mitigation editor state
   const [editingMitigations, setEditingMitigations] = useState<string[]>([]);
   const [showEditConfirm, setShowEditConfirm] = useState(false);
+
+  // PDF export state
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Chat scroll ref
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -356,6 +306,18 @@ export function TestingPage() {
       console.error('Failed to update mitigations:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!selectedTest) return;
+    setExportingPdf(true);
+    try {
+      await exportTestPdf(selectedTest, chatMessages, runResult, MITIGATION_OPTIONS);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -644,7 +606,13 @@ export function TestingPage() {
                 {/* Analysis Results */}
                 {runResult && (
                   <div className="glass-strong p-6 rounded-xl space-y-4">
-                    <h2 className="text-lg font-semibold">Analysis Results</h2>
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-lg font-semibold">Analysis Results</h2>
+                      <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={exportingPdf}>
+                        <Download className="w-4 h-4" />
+                        {exportingPdf ? 'Generating...' : 'Export Report'}
+                      </Button>
+                    </div>
 
                     <div
                       className={cn(
