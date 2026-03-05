@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from api.deps import get_db_session, get_provider_router
+from api.deps import get_db, get_provider_router
 from api.schemas.prompt_enhancers import PromptEnhancementCreate, PromptEnhancementOut
 from infra.persistance.models.prompt_enhancer_models import PromptEnhancement
 from app.routers.provider_router import ProviderRouter
@@ -41,7 +41,7 @@ async def get_prompt_mitigations():
 @router.post("", response_model=PromptEnhancementOut, status_code=201)
 async def enhance_prompt(
     payload: PromptEnhancementCreate,
-    session: Session = Depends(get_db_session),
+    session: Session = Depends(get_db),
     router_dep: ProviderRouter = Depends(get_provider_router),
 ) -> PromptEnhancementOut:
     """
