@@ -75,7 +75,10 @@ def prepend_mitigations(
     
     for mit_id in mitigation_ids:
         if mit_id in MITIGATION_REGISTRY:
-            mitigation_block += f"- {MITIGATION_REGISTRY[mit_id]}\n\n"
+            config = MITIGATION_REGISTRY[mit_id]
+            # Only include mitigations with prompt messages (PROMPT layer)
+            if config.prompt_message:
+                mitigation_block += f"- {config.prompt_message}\n\n"
     
     mitigation_block += "# System Instructions\n\n"
     
@@ -106,7 +109,7 @@ async def verify_enhancement(
         Verification result dictionary with verdict and details
     """
     mitigation_list = "\n".join(
-        f"- {MITIGATION_REGISTRY[mid]}"
+        f"- {MITIGATION_REGISTRY[mid].name}"
         for mid in mitigation_ids
         if mid in MITIGATION_REGISTRY
     )
