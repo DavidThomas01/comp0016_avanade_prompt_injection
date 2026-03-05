@@ -35,7 +35,7 @@ Run from the `backend/` folder:
 ```powershell
 cd backend
 $env:PYTHONPATH="src"
-uvicorn api.server:app --reload --port 8080
+uvicorn src.main:app --reload --port 8080
 ```
 
 ## Example POST

@@ -9,10 +9,33 @@ from api.schemas.prompt_enhancers import PromptEnhancementCreate, PromptEnhancem
 from infra.persistance.models.prompt_enhancer_models import PromptEnhancement
 from app.routers.provider_router import ProviderRouter
 from app.enhancer.prompt_enhancer_service import enhance_prompt_with_validation
+from infra.config.mitigations import MITIGATION_REGISTRY
+from domain.mitigations import MitigationLayer
 
 from core.exceptions import EnhancementValidationError
 
 router = APIRouter(prefix="/api/prompt-enhancements", tags=["prompt_enhancements"])
+
+
+@router.get("/mitigations", response_model=list[dict])
+async def get_prompt_mitigations():
+    """
+    Get all mitigations that can be applied at the PROMPT layer.
+    
+    Only returns mitigations with layer=PROMPT that have prompt_message defined.
+    These are the mitigations that can be prepended to user prompts.
+    """
+    prompt_mitigations = []
+    
+    for mitigation_id, config in MITIGATION_REGISTRY.items():
+        if config.layer == MitigationLayer.PROMPT and config.prompt_message:
+            prompt_mitigations.append({
+                "id": config.id,
+                "name": config.name,
+                "description": config.prompt_message,
+            })
+    
+    return prompt_mitigations
 
 
 @router.post("", response_model=PromptEnhancementOut, status_code=201)

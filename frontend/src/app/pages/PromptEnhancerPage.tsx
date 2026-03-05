@@ -1,7 +1,6 @@
 import { Send, Copy, RefreshCw, Loader, Sparkles, CheckCircle2, ChevronDown, Check } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { mitigations } from '../data/mitigations';
-import { enhancePrompt, PromptEnhancementResponse } from '../api/promptEnhancerClient';
+import { useMemo, useState, useEffect } from 'react';
+import { enhancePrompt, PromptEnhancementResponse, getPromptMitigations, PromptMitigation } from '../api/promptEnhancerClient';
 import { useRotatingText } from '../hooks/useRotatingText';
 
 const ENHANCER_PROGRESS_MESSAGES = [
@@ -126,10 +125,28 @@ export function PromptEnhancerPage() {
   const [enhancementResult, setEnhancementResult] = useState<PromptEnhancementResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mitigations, setMitigations] = useState<PromptMitigation[]>([]);
+  const [loadingMitigations, setLoadingMitigations] = useState(true);
   const selectedCount = selectedMitigations.length;
-  const mitigationCards = useMemo(() => mitigations, []);
+  const mitigationCards = useMemo(() => mitigations, [mitigations]);
 
   const progressText = useRotatingText(ENHANCER_PROGRESS_MESSAGES, 3000, loading);
+
+  // Fetch available mitigations on mount
+  useEffect(() => {
+    async function fetchMitigations() {
+      try {
+        const data = await getPromptMitigations();
+        setMitigations(data);
+      } catch (err) {
+        setError('Failed to load available mitigations');
+        console.error(err);
+      } finally {
+        setLoadingMitigations(false);
+      }
+    }
+    fetchMitigations();
+  }, []);
   
   const toggleMitigation = (id: string) => {
     setSelectedMitigations(prev =>
@@ -210,39 +227,50 @@ export function PromptEnhancerPage() {
             </div>
             
             <div className="p-4 space-y-3">
-              {mitigationCards.map((mitigation) => {
-                const active = selectedMitigations.includes(mitigation.id);
-                return (
-                  <button
-                    key={mitigation.id}
-                    type="button"
-                    onClick={() => toggleMitigation(mitigation.id)}
-                    className={`w-full text-left rounded-2xl p-4 border transition-all focus-ring ${
-                      active
-                        ? 'bg-orange-500/10 dark:bg-orange-500/15 border-orange-500/30'
-                        : 'bg-white/40 dark:bg-white/5 border-white/60 dark:border-white/10 hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-sm'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-semibold text-sm text-foreground truncate">
-                          {mitigation.name}
+              {loadingMitigations ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader className="h-6 w-6 animate-spin text-orange-600 dark:text-orange-400" />
+                </div>
+              ) : mitigationCards.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p className="text-sm">No prompt-layer mitigations available</p>
+                </div>
+              ) : (
+                mitigationCards.map((mitigation) => {
+                  const active = selectedMitigations.includes(mitigation.id);
+                  return (
+                    <button
+                      key={mitigation.id}
+                      type="button"
+                      onClick={() => toggleMitigation(mitigation.id)}
+                      className={`w-full text-left rounded-2xl p-4 border transition-all focus-ring ${
+                        active
+                          ? 'bg-orange-500/10 dark:bg-orange-500/15 border-orange-500/30'
+                          : 'bg-white/40 dark:bg-white/5 border-white/60 dark:border-white/10 hover:bg-white/70 dark:hover:bg-white/10 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm text-foreground truncate">
+                            {mitigation.name}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">
+                            {mitigation.description}
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">
-                          {mitigation.description}
-                        </p>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        {active ? (
-                          <CheckCircle2 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                        ) : (
-                          <div className="h-5 w-5 rounded-full border border-gray-900/15 dark:border-white/15 bg-white/60 dark:bg-white/5" />
-                        )}
+                        <div className="flex items-center gap-2">
+                          {active ? (
+                            <CheckCircle2 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                          ) : (
+                            <div className="h-5 w-5 rounded-full border border-gray-900/15 dark:border-white/15 bg-white/60 dark:bg-white/5" />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-              )})}  
+                    </button>
+                  );
+                })
+              )}
 
               <div className="mt-6 p-3 bg-gray-100 dark:bg-white/5 rounded border border-transparent dark:border-white/10">
                 <div className="text-sm font-medium mb-2 text-foreground">Selected Mitigations</div>
