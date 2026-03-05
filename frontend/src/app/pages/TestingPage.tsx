@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { CheckCircle2, AlertTriangle, Send, RefreshCcw, User, Bot, Settings, Trash2 } from 'lucide-react';
 import { cn } from '../components/ui/utils';
 import { MarkdownRenderer } from '../assistant/MarkdownRenderer';
+import { useFetchModelsAndMitigations } from '../hooks/useFetchModelsAndMitigations';
 
 type ModelType = 'platform' | 'external';
 type EnvType = 'mitigation' | 'custom';
@@ -61,24 +62,6 @@ type ChatMessage = {
 
 const API_BASE = 'http://localhost:8080/api';
 
-const MODEL_OPTIONS = [
-  { id: 'gpt-5.2', label: 'gpt-5.2' },
-  { id: 'gpt-5.1', label: 'gpt-5.1' },
-  { id: 'gpt-5-nano', label: 'gpt-5-nano' },
-  { id: 'o4-nano', label: 'o4-nano' },
-  { id: 'claude-sonnet-4-5', label: 'claude-sonnet-4-5' },
-  { id: 'claude-haiku-4-5', label: 'claude-haiku-4-5' },
-];
-
-const MITIGATION_OPTIONS = [
-  { id: 'delimiter_tokens', label: 'Delimiter Tokens' },
-  { id: 'input_validation', label: 'Input Validation' },
-  { id: 'pattern_matching', label: 'Pattern Matching' },
-  { id: 'blocklist_filtering', label: 'Blocklist Filtering' },
-  { id: 'output_sanitization', label: 'Output Sanitization' },
-  { id: 'anomaly_detection', label: 'Anomaly Detection' },
-];
-
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
@@ -115,6 +98,9 @@ async function apiDelete(path: string): Promise<void> {
 const makeId = () => `msg_${Math.random().toString(36).slice(2, 10)}`;
 
 export function TestingPage() {
+  // Fetch models and mitigations from backend
+  const { models, mitigations, isLoading: isLoadingData, error: dataError, refetch } = useFetchModelsAndMitigations();
+
   // Tests state
   const [tests, setTests] = useState<Test[]>([]);
   const [selectedTest, setSelectedTest] = useState<Test | null>(null);
@@ -127,7 +113,7 @@ export function TestingPage() {
   // Form state
   const [newName, setNewName] = useState('');
   const [modelType, setModelType] = useState<ModelType>('platform');
-  const [modelId, setModelId] = useState(MODEL_OPTIONS[0]?.id ?? 'gpt-5.2');
+  const [modelId, setModelId] = useState('');
   const [endpoint, setEndpoint] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -141,6 +127,13 @@ export function TestingPage() {
 
   // Chat scroll ref
   const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // Set default model ID when models are loaded
+  useEffect(() => {
+    if (models.length > 0 && !modelId) {
+      setModelId(models[0].id);
+    }
+  }, [models, modelId]);
 
   // Load tests on mount
   useEffect(() => {
@@ -222,7 +215,7 @@ export function TestingPage() {
       // Reset form
       setNewName('');
       setModelType('platform');
-      setModelId(MODEL_OPTIONS[0]?.id ?? 'gpt-5.2');
+      setModelId(models.length > 0 ? models[0].id : '');
       setEndpoint('');
       setApiKey('');
       setSystemPrompt('');
@@ -414,17 +407,27 @@ export function TestingPage() {
               {modelType === 'platform' ? (
                 <div>
                   <label className="block text-sm font-medium mb-1">Select Model</label>
-                  <select
-                    value={modelId}
-                    onChange={e => setModelId(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-400 dark:focus:border-orange-500 transition-all"
-                  >
-                    {MODEL_OPTIONS.map(opt => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  {isLoadingData ? (
+                    <div className="w-full px-3 py-2 bg-gray-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-muted-foreground">
+                      Loading models...
+                    </div>
+                  ) : models.length > 0 ? (
+                    <select
+                      value={modelId}
+                      onChange={e => setModelId(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-400 dark:focus:border-orange-500 transition-all"
+                    >
+                      {models.map(model => (
+                        <option key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="w-full px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
+                      Failed to load models {dataError && `(${dataError.message})`}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
@@ -466,19 +469,27 @@ export function TestingPage() {
 
                   <div>
                     <label className="block text-sm font-medium mb-2">Mitigations (optional)</label>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {MITIGATION_OPTIONS.map(mit => (
-                        <label key={mit.id} className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedMitigations.includes(mit.id)}
-                            onChange={() => toggleMitigation(mit.id)}
-                            className="w-4 h-4"
-                          />
-                          <span className="text-sm">{mit.label}</span>
-                        </label>
-                      ))}
-                    </div>
+                    {isLoadingData ? (
+                      <div className="text-sm text-muted-foreground">Loading mitigations...</div>
+                    ) : mitigations.length > 0 ? (
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {mitigations.map(mitigation => (
+                          <label key={mitigation.id} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedMitigations.includes(mitigation.id)}
+                              onChange={() => toggleMitigation(mitigation.id)}
+                              className="w-4 h-4"
+                            />
+                            <span className="text-sm">{mitigation.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-red-700 dark:text-red-300">
+                        Failed to load mitigations {dataError && `(${dataError.message})`}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -717,7 +728,7 @@ export function TestingPage() {
                 <p className="text-xs font-medium text-muted-foreground mb-2">New configuration:</p>
                 {editingMitigations.length > 0 ? (
                   editingMitigations.map(id => {
-                    const label = MITIGATION_OPTIONS.find(m => m.id === id)?.label || id;
+                    const label = mitigations.find(m => m.id === id)?.label || id;
                     return (
                       <div key={id} className="text-xs text-foreground flex items-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-orange-600" />
