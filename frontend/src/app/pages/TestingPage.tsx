@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckCircle2, AlertTriangle, Send, RefreshCcw, User, Bot, Settings, Trash2, Download } from 'lucide-react';
 import { cn } from '../components/ui/utils';
 import { MarkdownRenderer } from '../assistant/MarkdownRenderer';
@@ -63,6 +63,35 @@ type ChatMessage = {
   content: string;
   pending?: boolean;
 };
+const LOADING_MESSAGES = [
+  'Sending prompt to the model\u2026',
+  'Waiting for the model to respond\u2026',
+  'Processing the response\u2026',
+  'Running injection analysis\u2026',
+  'Evaluating output against mitigations\u2026',
+  'Scoring risk indicators\u2026',
+  'Almost there\u2026',
+];
+const LOADING_INTERVAL_MS = 3_200;
+
+function useRotatingMessage(active: boolean) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      setIndex(0);
+      return;
+    }
+    const id = setInterval(() => {
+      setIndex(prev => (prev + 1) % LOADING_MESSAGES.length);
+    }, LOADING_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [active]);
+
+  return LOADING_MESSAGES[index];
+}
+
+const API_BASE = 'http://localhost:8080/api';
 
 const API_BASE = 'http://localhost:8080/api';
 
@@ -131,6 +160,8 @@ export function TestingPage() {
 
   // PDF export state
   const [exportingPdf, setExportingPdf] = useState(false);
+
+  const loadingMessage = useRotatingMessage(isLoading);
 
   // Chat scroll ref
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -632,10 +663,18 @@ export function TestingPage() {
                         </div>
                         <div className="max-w-md px-4 py-3 rounded-lg border bg-white dark:bg-gray-900 text-foreground border-border rounded-bl-none">
                           <div className="font-semibold mb-1 text-xs uppercase opacity-75">Assistant</div>
-                          <div className="flex gap-1">
-                            <span className="w-2 h-2 bg-orange-600 rounded-full animate-bounce"></span>
-                            <span className="w-2 h-2 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
-                            <span className="w-2 h-2 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                          <div className="flex items-center gap-2">
+                            <span className="flex gap-1">
+                              <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" />
+                              <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
+                              <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+                            </span>
+                            <span
+                              key={loadingMessage}
+                              className="text-sm text-muted-foreground animate-in fade-in duration-500"
+                            >
+                              {loadingMessage}
+                            </span>
                           </div>
                         </div>
                       </div>
