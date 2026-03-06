@@ -133,5 +133,5 @@ class TestService():
         
     
     def _update_context_with_response(self, db: Session, test: Test, response: str):
-        test.runner.context.append(Message(role="system", content=response))
+        test.runner.context.append(Message(role="assistant", content=response))
         self.repo.update(db, test)

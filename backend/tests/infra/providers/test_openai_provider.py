@@ -5,6 +5,8 @@ import pytest
 from infra.providers.openai_provider import OpenAIProvider
 from domain.providers.base_provider import ModelRequest, Message
 
+from core.exceptions import UnsafePromptError
+
 
 class DummyResponse:
 	def __init__(self, status_code: int = 200, payload: dict | None = None, text: str = "") -> None:
@@ -125,7 +127,7 @@ def test_http_error_raises(monkeypatch):
 	provider = OpenAIProvider()
 	request = ModelRequest(model="gpt-5.2", messages=[Message(role="user", content="hi")])
 
-	with pytest.raises(RuntimeError, match="OpenAI provider error"):
+	with pytest.raises(UnsafePromptError, match="OpenAI provider error"):
 		run(provider.generate(request))
 
 

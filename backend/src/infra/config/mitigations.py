@@ -50,3 +50,20 @@ MITIGATION_REGISTRY = {
         implementation="anomaly_detector",
     ),
 }
+
+
+def get_mitigations() -> dict:
+    """Get all available mitigations for the frontend."""
+    return {
+        mitigation_id: {
+            "id": mitigation_id,
+            "label": config.name,
+            "layer": config.layer.value,
+        }
+        for mitigation_id, config in MITIGATION_REGISTRY.items()
+    }
+
+
+def get_mitigation_config(mitigation_id: str):
+    """Get a specific mitigation configuration."""
+    return MITIGATION_REGISTRY.get(mitigation_id)

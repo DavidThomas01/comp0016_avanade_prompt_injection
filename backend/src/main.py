@@ -26,3 +26,5 @@ app.state.container = container
 app.include_router(test_router)
 app.include_router(chat_router)
 app.include_router(enhancer_router)
+app.include_router(models_router)
+app.include_router(mitigations_router)
