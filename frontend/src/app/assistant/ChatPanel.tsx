@@ -13,6 +13,17 @@ import { streamChatMessage } from './chatClient';
 import { loadThread, saveThread } from './storage';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ChatMessage, ChatRole } from './types';
+import { useRotatingText } from '../hooks/useRotatingText';
+
+const THINKING_PHRASES = [
+  'Analyzing your question\u2026',
+  'Searching knowledge base\u2026',
+  'Reviewing security concepts\u2026',
+  'Checking mitigations\u2026',
+  'Gathering insights\u2026',
+  'Consulting threat models\u2026',
+  'Cross-referencing attacks\u2026',
+];
 
 type ChatPanelProps = {
   variant: 'compact' | 'full';
@@ -55,6 +66,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const streamedTextRef = useRef('');
   const abortRef = useRef<AbortController | null>(null);
+  const thinkingText = useRotatingText(THINKING_PHRASES, 2000, isSending);
 
   useEffect(() => {
     saveThread(messages);
@@ -306,7 +318,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             <div className="flex justify-start">
               <div className="rounded-2xl glass-chat-reply px-3.5 py-2 text-[13px] text-muted-foreground flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-500" />
-                Thinking&hellip;
+                {thinkingText}
               </div>
             </div>
           )}

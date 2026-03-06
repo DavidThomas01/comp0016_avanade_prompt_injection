@@ -1,10 +1,15 @@
+import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useNavigate } from 'react-router-dom';
 import type { Components } from 'react-markdown';
 
 type Props = { content: string };
 
-const components: Components = {
+const LINK_CLASSES =
+  'text-orange-600 dark:text-orange-400 underline hover:text-orange-800 dark:hover:text-orange-300';
+
+const baseComponents: Components = {
   h1: ({ children }) => (
     <h1 className="text-base font-bold mt-3 mb-1">{children}</h1>
   ),
@@ -19,11 +24,6 @@ const components: Components = {
   ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
   li: ({ children }) => <li className="leading-relaxed">{children}</li>,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-  a: ({ href, children }) => (
-    <a href={href} className="text-orange-600 dark:text-orange-400 underline hover:text-orange-800 dark:hover:text-orange-300" target="_blank" rel="noopener noreferrer">
-      {children}
-    </a>
-  ),
   code: ({ className, children }) => {
     const isBlock = className?.startsWith('language-');
     if (isBlock) {
@@ -60,6 +60,41 @@ const components: Components = {
 };
 
 export function MarkdownRenderer({ content }: Props) {
+  const navigate = useNavigate();
+
+  const components = useMemo<Components>(
+    () => ({
+      ...baseComponents,
+      a: ({ href, children }) => {
+        if (href?.startsWith('/')) {
+          return (
+            <a
+              href={href}
+              className={LINK_CLASSES}
+              onClick={e => {
+                e.preventDefault();
+                navigate(href);
+              }}
+            >
+              {children}
+            </a>
+          );
+        }
+        return (
+          <a
+            href={href}
+            className={LINK_CLASSES}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {children}
+          </a>
+        );
+      },
+    }),
+    [navigate],
+  );
+
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
       {content}

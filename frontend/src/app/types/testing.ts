@@ -1,0 +1,55 @@
+export type ModelType = 'platform' | 'external';
+export type EnvType = 'mitigation' | 'custom';
+export type RunnerType = 'prompt' | 'framework';
+
+export type Message = {
+  role: string;
+  content: string;
+};
+
+export type ModelSpec = {
+  type: ModelType;
+  model_id?: string | null;
+  endpoint?: string | null;
+  key?: string | null;
+};
+
+export type EnvironmentSpec = {
+  type: EnvType;
+  system_prompt: string;
+  mitigations: string[];
+};
+
+export type RunnerSpec = {
+  type: RunnerType;
+  context: Message[];
+};
+
+export type Test = {
+  id: string;
+  name: string;
+  model: ModelSpec;
+  environment?: EnvironmentSpec | null;
+  runner: RunnerSpec;
+  created_at?: string;
+};
+
+export type TestAnalysis = {
+  flagged: boolean;
+  score: number;
+  reason: string;
+};
+
+export type RunResult = {
+  output: string;
+  analysis: TestAnalysis;
+  started_at: string;
+  finished_at: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  pending?: boolean;
+};

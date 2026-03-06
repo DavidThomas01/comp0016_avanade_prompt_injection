@@ -9,6 +9,7 @@ from app.routers.provider_router import ProviderRouter
 from domain.knowledge.search import search_knowledge_base
 from domain.knowledge.vulnerabilities import VULNERABILITIES
 from domain.knowledge.mitigations import MITIGATIONS
+from domain.knowledge.routes import VULNERABILITY_PATHS
 from domain.providers.base_provider import Message, ModelRequest
 from infra.config.chat import (
     CHUNK_SIZE,
@@ -48,8 +49,11 @@ def _build_kb_context(query: str) -> str:
         if r.kind == "vulnerability":
             v = VULNERABILITIES.get(r.id)
             if v:
+                page_path = VULNERABILITY_PATHS.get(v.id, "")
+                page_line = f"**Page:** [{v.name}]({page_path})\n" if page_path else ""
                 sections.append(
                     f"### {v.name}\n"
+                    f"{page_line}"
                     f"{v.description}\n\n"
                     f"**Impact:** {v.impact_level}\n"
                     f"**Tags:** {', '.join(v.tags)}\n\n"
@@ -64,6 +68,7 @@ def _build_kb_context(query: str) -> str:
             if m:
                 sections.append(
                     f"### Mitigation: {m.name}\n"
+                    f"**Page:** [View mitigations](/mitigations)\n"
                     f"{m.description}\n\n"
                     f"**Strategy:** {m.strategy}\n"
                     f"**Defense flow:** {' \u2192 '.join(m.defense_flow)}"
