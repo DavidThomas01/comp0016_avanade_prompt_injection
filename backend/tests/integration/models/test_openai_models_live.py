@@ -53,7 +53,6 @@ async def test_gpt5nano_live_call():
     response = await provider.generate(
         ModelRequest(
             model="gpt-5-nano",
-            temperature=1,
             messages=[Message(role="user", content="Say hello")]
         )
     )
@@ -73,7 +72,6 @@ async def test_o4nano_live_call():
     response = await provider.generate(
         ModelRequest(
             model="o4-nano",
-            temperature=1,
             messages=[Message(role="user", content="Say hello")]
         )
     )
