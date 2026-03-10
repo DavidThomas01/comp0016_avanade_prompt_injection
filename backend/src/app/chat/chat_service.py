@@ -71,7 +71,7 @@ def _build_kb_context(query: str) -> str:
                     f"**Page:** [View mitigations](/mitigations)\n"
                     f"{m.description}\n\n"
                     f"**Strategy:** {m.strategy}\n"
-                    f"**Defense flow:** {' \u2192 '.join(m.defense_flow)}"
+                    f"**Defense flow:** {' → '.join(m.defense_flow)}"
                 )
 
     return "\n\n---\n\n".join(sections)
