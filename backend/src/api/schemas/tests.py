@@ -13,6 +13,7 @@ class ModelSpecSchema(BaseModel):
     endpoint: Optional[str] = None
     conversation_mode: Optional[str] = None
     message_field: Optional[str] = None
+    response_text_path: Optional[str] = None
     headers: Optional[dict[str, str]] = None
     payload: Optional[dict[str, Any]] = None
     json_schema: Optional[dict[str, Any]] = None
@@ -24,10 +25,24 @@ class ModelSpecSchema(BaseModel):
             endpoint=self.endpoint,
             conversation_mode=self.conversation_mode,
             message_field=self.message_field,
+            response_text_path=self.response_text_path,
             headers=self.headers,
             payload=self.payload,
             json_schema=self.json_schema,
         )
+
+
+class ValidateExternalModelRequest(BaseModel):
+    model: ModelSpecSchema
+    prompt: str = "Connection check"
+
+    def to_dto(self) -> tuple[ModelSpecInput, str]:
+        return self.model.to_dto(), self.prompt
+
+
+class ValidateExternalModelResponse(BaseModel):
+    output: str
+    raw: Any
 
 
 class EnvironmentSpecSchema(BaseModel):
