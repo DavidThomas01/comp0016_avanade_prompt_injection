@@ -11,14 +11,22 @@ class ModelSpecSchema(BaseModel):
     type: ModelType
     model_id: Optional[str] = None
     endpoint: Optional[str] = None
-    key: Optional[str] = None
+    conversation_mode: Optional[str] = None
+    message_field: Optional[str] = None
+    headers: Optional[dict[str, str]] = None
+    payload: Optional[dict[str, Any]] = None
+    json_schema: Optional[dict[str, Any]] = None
     
     def to_dto(self) -> ModelSpecInput:
         return ModelSpecInput(
             type=self.type,
             model_id=self.model_id,
             endpoint=self.endpoint,
-            key=self.key,
+            conversation_mode=self.conversation_mode,
+            message_field=self.message_field,
+            headers=self.headers,
+            payload=self.payload,
+            json_schema=self.json_schema,
         )
 
 

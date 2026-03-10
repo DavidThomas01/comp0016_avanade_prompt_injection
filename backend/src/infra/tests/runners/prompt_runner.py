@@ -7,6 +7,7 @@ from domain.mitigations import *
 from infra.config.mitigations import MITIGATION_REGISTRY
 from infra.tests.analyzers import PromptTestAnalyser
 from core.exceptions import UnknownMitigation, UnsafePromptError
+from infra.providers.external_http_provider import ExternalHttpProvider
 
 
 class PromptRunner(TestRunner):
@@ -123,11 +124,15 @@ class PromptRunner(TestRunner):
         
         
     async def _run_test_on_external_model(self, test: Test, prompt: Optional[Message]) -> ModelResponse:
-        provider = ExternalModelProvider()
+        provider = ExternalHttpProvider()
         request = ExternalModelRequest(
             endpoint=test.model.endpoint,
-            key=test.model.key,
-            messages=(test.runner.context + [prompt])
+            messages=(test.runner.context + [prompt]),
+            conversation_mode=test.model.conversation_mode or "single",
+            message_field=test.model.message_field or "input",
+            headers=test.model.headers,
+            payload=test.model.payload,
+            json_schema=test.model.json_schema,
         )
         return await provider.generate(request)
             

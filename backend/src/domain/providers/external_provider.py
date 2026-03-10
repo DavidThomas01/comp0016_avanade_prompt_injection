@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List
+from typing import Any, List, Optional
 from .message import Message
 from .model_response import ModelResponse
 
@@ -8,8 +8,12 @@ from .model_response import ModelResponse
 @dataclass
 class ExternalModelRequest:
     endpoint: str
-    key: str
     messages: List[Message]
+    conversation_mode: str
+    message_field: str
+    headers: Optional[dict[str, str]] = None
+    payload: Optional[dict[str, Any]] = None
+    json_schema: Optional[dict[str, Any]] = None
 
 
 class ExternalModelProvider(ABC):
