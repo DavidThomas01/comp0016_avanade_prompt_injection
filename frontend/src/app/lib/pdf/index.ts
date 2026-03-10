@@ -1,11 +1,15 @@
 import { pdf } from '@react-pdf/renderer';
-import { createElement } from 'react';
+import { createElement, type ReactElement } from 'react';
 import type { Vulnerability } from '../../data/vulnerabilities';
 import type { Mitigation, CodeLanguage } from '../../data/mitigations';
 import type { Test, ChatMessage, RunResult } from '../../types/testing';
 import { VulnerabilityDocument } from './vulnerability-document';
 import { TestDocument } from './test-document';
 import { MitigationDocument } from './mitigation-document';
+
+// @react-pdf/renderer's pdf() types require DocumentProps, but our
+// document components are valid Document wrappers — cast is safe.
+const renderPdf = pdf as (doc: ReactElement) => ReturnType<typeof pdf>;
 
 function slugify(text: string): string {
   return text
@@ -33,7 +37,7 @@ export async function exportVulnerabilityPdf(
     vulnerability,
     resolvedMitigations,
   });
-  const blob = await pdf(doc).toBlob();
+  const blob = await renderPdf(doc).toBlob();
   triggerDownload(blob, `vulnerability-${slugify(vulnerability.id)}-report.pdf`);
 }
 
@@ -49,7 +53,7 @@ export async function exportTestPdf(
     runResult,
     mitigationOptions,
   });
-  const blob = await pdf(doc).toBlob();
+  const blob = await renderPdf(doc).toBlob();
   triggerDownload(blob, `test-${slugify(test.name)}-report.pdf`);
 }
 
@@ -58,6 +62,6 @@ export async function exportMitigationPdf(
   languages?: CodeLanguage[],
 ): Promise<void> {
   const doc = createElement(MitigationDocument, { mitigation, languages });
-  const blob = await pdf(doc).toBlob();
+  const blob = await renderPdf(doc).toBlob();
   triggerDownload(blob, `mitigation-${slugify(mitigation.id)}-report.pdf`);
 }
