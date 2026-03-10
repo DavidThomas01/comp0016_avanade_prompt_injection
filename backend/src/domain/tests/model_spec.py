@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from core.exceptions import InvalidModelConfiguration
 
@@ -18,7 +18,11 @@ class ModelSpec:
     model_id: Optional[str] = None
     
     endpoint: Optional[str] = None
-    key: Optional[str] = None
+    conversation_mode: Optional[str] = None
+    message_field: Optional[str] = None
+    headers: Optional[dict[str, str]] = None
+    payload: Optional[dict[str, Any]] = None
+    json_schema: Optional[dict[str, Any]] = None
     
     
     @classmethod
@@ -32,13 +36,25 @@ class ModelSpec:
         
         
     @classmethod
-    def create_external(cls, endpoint: Optional[str] = None, key: Optional[str] = None):
-        if not endpoint or not key:
-            raise InvalidModelConfiguration("external model spec missing endpoint or key")
+    def create_external(
+        cls,
+        endpoint: Optional[str] = None,
+        conversation_mode: str = "single",
+        message_field: str = "input",
+        headers: Optional[dict[str, str]] = None,
+        payload: Optional[dict[str, Any]] = None,
+        json_schema: Optional[dict[str, Any]] = None,
+    ):
+        if not endpoint:
+            raise InvalidModelConfiguration("external model spec missing endpoint")
         return cls(
             type=ModelType.EXTERNAL,
             endpoint=endpoint,
-            key=key
+            conversation_mode=conversation_mode,
+            message_field=message_field,
+            headers=headers,
+            payload=payload,
+            json_schema=json_schema,
         )
 
 
@@ -46,11 +62,30 @@ class ModelSpec:
         if self.type == ModelType.PLATFORM:
             if not self.model_id:
                 raise InvalidModelConfiguration("platform model requires model id")
-            if self.endpoint or self.key:
-                raise InvalidModelConfiguration("platform model cannot include custom endpoint or key")
+            if any(
+                value is not None
+                for value in (
+                    self.endpoint,
+                    self.conversation_mode,
+                    self.headers,
+                    self.payload,
+                    self.json_schema,
+                )
+            ):
+                raise InvalidModelConfiguration("platform model cannot include custom endpoint")
 
         if self.type == ModelType.EXTERNAL:
-            if not self.endpoint or not self.key:
-                raise InvalidModelConfiguration("external model requires endpoint and key")
+            if not self.endpoint:
+                raise InvalidModelConfiguration("external model requires endpoint")
             if self.model_id:
-                raise InvalidModelConfiguration("external model cannot include model id")
+                raise InvalidModelConfiguration("external model cannot include model_id")
+            if self.conversation_mode not in {"single", "multi"}:
+                raise InvalidModelConfiguration("external model requires conversation_mode: 'single' or 'multi'")
+            if not self.message_field:
+                raise InvalidModelConfiguration("external model requires message_field")
+            if self.headers is not None and not isinstance(self.headers, dict):
+                raise InvalidModelConfiguration("external model headers must be a JSON object")
+            if self.payload is not None and not isinstance(self.payload, dict):
+                raise InvalidModelConfiguration("external model payload must be a JSON object")
+            if self.json_schema is not None and not isinstance(self.json_schema, dict):
+                raise InvalidModelConfiguration("external model json_schema must be a JSON object")
