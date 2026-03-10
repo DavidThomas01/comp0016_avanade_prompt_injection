@@ -61,7 +61,14 @@ class TestService():
         if model_spec_input.type == ModelType.PLATFORM:
             return ModelSpec.create_platform(model_spec_input.model_id)
         if model_spec_input.type == ModelType.EXTERNAL:
-            return ModelSpec.create_external(model_spec_input.endpoint, model_spec_input.key)
+            return ModelSpec.create_external(
+                endpoint=model_spec_input.endpoint,
+                conversation_mode=model_spec_input.conversation_mode or "single",
+                message_field=model_spec_input.message_field or "input",
+                headers=model_spec_input.headers,
+                payload=model_spec_input.payload,
+                json_schema=model_spec_input.json_schema,
+            )
         raise InvalidModelConfiguration(f"invalid model type: {model_spec_input.type}")
     
         
