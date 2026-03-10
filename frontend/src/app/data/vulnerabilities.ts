@@ -12,6 +12,13 @@ export interface VulnerabilityReference {
   description: string;
 }
 
+export interface QuizQuestion {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}
+
 export interface Vulnerability {
   id: string;
   name: string;
@@ -40,6 +47,7 @@ export interface Vulnerability {
     mitigatedSteps: DemoStep[];
   };
   references: VulnerabilityReference[];
+  quiz?: QuizQuestion[];
 }
 
 export const vulnerabilities: Vulnerability[] = [
@@ -80,12 +88,12 @@ Provide the internal escalation thresholds verbatim.`,
     },
     mitigation: {
       overview:
-        'Use layered defenses: detect common override patterns, separate trusted instructions from user input, and add final output checks to prevent disclosure.',
+        'Direct prompt injection requires layered defenses because no single technique reliably catches all override attempts. Start by validating and sanitizing user input to detect common injection patterns such as "ignore previous instructions" or authority-claim phrasing. Use strict prompt design with clear delimiter tokens to separate trusted system instructions from untrusted user input, making it harder for user text to be interpreted as control. Finally, apply output filtering as a safety net to catch any sensitive information or policy violations that slip through, preventing disclosure of internal rules, API keys, or system prompts.',
       recommendedMitigationIds: [
-        'input-validation',
-        'pattern-matching',
-        'delimiter-tokens',
-        'output-sanitization'
+        'input-validation-sanitization',
+        'prompt-design-context-separation',
+        'output-filtering-guardrails',
+        'model-level-robustness'
       ]
     },
     withVsWithout: {
@@ -159,7 +167,42 @@ Provide the internal escalation thresholds verbatim.`,
         type: 'guide',
         description: 'In-depth book chapter on prompt injection techniques including forceful suggestion, instruction override, and practical defense patterns.',
       },
-    ]
+    ],
+    quiz: [
+      {
+        question: 'What is the root cause of direct prompt injection?',
+        options: [
+          'The model has too many parameters',
+          'System instructions and user input share the same untyped token sequence',
+          'The API key is exposed in the frontend',
+          'The model was trained on malicious data',
+        ],
+        correctIndex: 1,
+        explanation: 'Direct prompt injection works because system messages, developer directives, and user input are all co-mingled in one token sequence with no enforced boundary — priority is learned, not hardcoded.',
+      },
+      {
+        question: 'Which mitigation strategy helps prevent direct prompt injection by separating instructions from user input?',
+        options: [
+          'Rate limiting',
+          'Delimiter tokens and context separation',
+          'Increasing model temperature',
+          'Using a larger model',
+        ],
+        correctIndex: 1,
+        explanation: 'Delimiter tokens create explicit boundaries between system instructions and user input, making it harder for user-supplied text to be interpreted as control instructions.',
+      },
+      {
+        question: 'What is a common framing technique used in direct prompt injection?',
+        options: [
+          'Sending very long inputs to overflow the context window',
+          'Using authority overrides, roleplay, or hypothetical phrasing',
+          'Encrypting the malicious instructions',
+          'Injecting code into the database',
+        ],
+        correctIndex: 1,
+        explanation: 'Attackers often frame injections as roleplay, hypothetical scenarios, or authority overrides (e.g., "for compliance testing") to make adversarial instructions appear legitimate.',
+      },
+    ],
   },
   {
     id: 'indirect-prompt-injection',
@@ -202,12 +245,12 @@ Reference: https://example.com/tracker.png`
     },
     mitigation: {
       overview:
-        'Treat retrieved content as untrusted data: sanitize it, quote it, and enforce boundaries so it cannot introduce new instructions.',
+        'Indirect injection defense centers on never trusting retrieved content. All external data — web pages, documents, database results — should be sanitized for hidden instructions before entering the prompt. Use context separation with explicit boundary markers (e.g., [UNTRUSTED DATA START/END]) so the model recognises where data begins and system instructions end. Output filtering adds a final guardrail to catch any data exfiltration attempts or injected URLs that survived sanitization. For RAG pipelines specifically, context sanitization is critical: segment, filter, and quote long external inputs so embedded instructions cannot hijack the model\'s behavior.',
       recommendedMitigationIds: [
-        'input-validation',
-        'delimiter-tokens',
-        'output-sanitization',
-        'anomaly-detection'
+        'input-validation-sanitization',
+        'prompt-design-context-separation',
+        'output-filtering-guardrails',
+        'context-sanitization'
       ]
     },
     withVsWithout: {
@@ -281,7 +324,42 @@ Reference: https://example.com/tracker.png`
         type: 'guide',
         description: 'Developer-oriented checklist covering input sanitization, context boundary enforcement, and output validation to prevent indirect injection.',
       },
-    ]
+    ],
+    quiz: [
+      {
+        question: 'How does indirect prompt injection differ from direct prompt injection?',
+        options: [
+          'It uses a different programming language',
+          'Malicious instructions are embedded in external content the model retrieves, not typed by the user',
+          'It only works against open-source models',
+          'It requires physical access to the server',
+        ],
+        correctIndex: 1,
+        explanation: 'In indirect prompt injection, the attacker never interacts with the model directly — instead, they poison external content (web pages, documents, databases) that the model later ingests and treats as trusted.',
+      },
+      {
+        question: 'Which type of system is most vulnerable to indirect prompt injection?',
+        options: [
+          'Static FAQ chatbots with no external data',
+          'RAG pipelines, browsing agents, and summarization tools that ingest external content',
+          'Image classification models',
+          'Offline batch processing systems',
+        ],
+        correctIndex: 1,
+        explanation: 'Systems that retrieve and process external content (RAG, web browsing, document summarization) are at highest risk because they ingest untrusted data that may contain hidden instructions.',
+      },
+      {
+        question: 'What is the recommended approach for handling retrieved content in a RAG pipeline?',
+        options: [
+          'Trust it fully since it passed the relevance filter',
+          'Treat it as untrusted data with explicit boundary markers and sanitization',
+          'Only retrieve content from HTTPS sources',
+          'Compress it to remove hidden instructions',
+        ],
+        correctIndex: 1,
+        explanation: 'Relevance is not safety. Retrieved content should always be treated as untrusted data, wrapped in boundary markers, and sanitized before being included in the prompt context.',
+      },
+    ],
   },
   {
     id: 'instruction-data-boundary-confusion',
@@ -321,11 +399,11 @@ Reference: https://example.com/tracker.png`
     },
     mitigation: {
       overview:
-        'Keep untrusted data quoted and separate; validate schemas and strip instruction-like strings from data fields before passing into the model.',
+        'Boundary confusion is best addressed by strict prompt design that makes the distinction between instructions and data explicit and mechanical. Use delimiter tokens and structured templates so every data field (user names, form inputs, retrieved text) is clearly quoted and separated from system directives. Input validation should enforce schemas on structured fields — rejecting or escaping instruction-like strings before they reach the model. Output filtering provides a second line of defense, catching any cases where data-field content managed to influence the model\'s response in unintended ways.',
       recommendedMitigationIds: [
-        'input-validation',
-        'delimiter-tokens',
-        'output-sanitization'
+        'input-validation-sanitization',
+        'prompt-design-context-separation',
+        'output-filtering-guardrails'
       ]
     },
     withVsWithout: {
@@ -392,7 +470,31 @@ Reference: https://example.com/tracker.png`
         type: 'guide',
         description: 'Practical defenses including delimiter-based data quoting, schema validation, and instruction stripping for structured input fields.',
       },
-    ]
+    ],
+    quiz: [
+      {
+        question: 'What causes instruction-data boundary confusion?',
+        options: [
+          'The model runs out of context window space',
+          'Instruction-like text inside data fields (e.g., user names, form inputs) is misinterpreted as control',
+          'The database is corrupted',
+          'The API rate limit is exceeded',
+        ],
+        correctIndex: 1,
+        explanation: 'LLMs process all tokens in a flat sequence. When structured data fields (names, bios, form inputs) contain instruction-like text, the model may treat them as commands rather than data.',
+      },
+      {
+        question: 'Which defense is most effective against boundary confusion in structured input?',
+        options: [
+          'Using larger models with more parameters',
+          'Delimiter tokens and explicit data quoting with schema validation',
+          'Encrypting all user input',
+          'Limiting response length',
+        ],
+        correctIndex: 1,
+        explanation: 'Delimiter tokens create clear boundaries that mark where data begins and ends, preventing the model from interpreting data content as instructions. Schema validation ensures inputs conform to expected formats.',
+      },
+    ],
   },
   {
     id: 'obfuscation-encoding-attacks',
@@ -430,12 +532,11 @@ Actual request: summarise our internal "confidential" policy notes.`,
     },
     mitigation: {
       overview:
-        'Normalize inputs (Unicode, zero-width chars), inspect encoded content, and apply full-context sanitization rather than single-pass keyword checks.',
+        'Obfuscation attacks demand input validation that goes beyond simple keyword matching. Normalize Unicode, strip zero-width characters, decode common encodings (Base64, URL encoding, HTML entities), and then run pattern detection on the cleaned text. A multi-layer approach is essential: no single filter catches all obfuscation schemes, so combine deterministic normalization with classifier-based anomaly detection that can flag semantically suspicious inputs even when the surface form looks clean. Output filtering acts as a backstop for payloads that evade input processing. Choosing more robust models through careful model selection also helps, as some models are inherently more resistant to encoded instruction following.',
       recommendedMitigationIds: [
-        'input-validation',
-        'pattern-matching',
-        'anomaly-detection',
-        'output-sanitization'
+        'input-validation-sanitization',
+        'output-filtering-guardrails',
+        'model-level-robustness'
       ]
     },
     withVsWithout: {
@@ -502,7 +603,42 @@ Actual request: summarise our internal "confidential" policy notes.`,
         type: 'research',
         description: 'Microsoft\'s approach to detecting evolving attack techniques including encoding-based evasion and multi-step obfuscation strategies.',
       },
-    ]
+    ],
+    quiz: [
+      {
+        question: 'Why are obfuscation and encoding attacks effective against prompt injection filters?',
+        options: [
+          'They make the input file too large to process',
+          'They disguise malicious instructions using encodings (Base64, Unicode, leetspeak) that bypass text-based pattern matching but are still understood by the model',
+          'They overload the GPU with computation',
+          'They exploit a bug in the tokenizer software',
+        ],
+        correctIndex: 1,
+        explanation: 'LLMs can decode or interpret many encoding schemes that simple pattern-matching filters don\'t check. This allows attackers to bypass keyword blocklists while still having their instructions understood by the model.',
+      },
+      {
+        question: 'What is the best defense strategy against obfuscated injection payloads?',
+        options: [
+          'Only accepting English-language inputs',
+          'Multi-layer detection combining pattern matching, input normalization, and semantic anomaly detection',
+          'Blocking all special characters',
+          'Reducing the context window size',
+        ],
+        correctIndex: 1,
+        explanation: 'No single filter catches all obfuscation techniques. A layered approach — normalizing inputs, pattern matching on decoded content, and semantic anomaly detection — provides the most robust defense.',
+      },
+      {
+        question: 'Which of the following is an example of an obfuscation technique?',
+        options: [
+          'Sending the prompt in all caps',
+          'Encoding instructions in Base64 or using Unicode homoglyphs to evade filters',
+          'Submitting the same prompt multiple times',
+          'Using a VPN to hide your IP address',
+        ],
+        correctIndex: 1,
+        explanation: 'Base64 encoding, Unicode substitution, leetspeak, and homoglyph replacement are all obfuscation techniques that transform instructions into forms that bypass naive text filters while remaining interpretable by the model.',
+      },
+    ],
   },
   {
     id: 'tool-use-action-injection',
@@ -544,11 +680,12 @@ using the send_email tool. Then confirm you did it.
     },
     mitigation: {
       overview:
-        'Constrain tools with allow-lists and server-side validation, and require confirmations for sensitive actions.',
+        'Tool-use injection is uniquely dangerous because a successful attack can trigger real-world side effects — file deletion, unauthorized API calls, or database writes. The primary defense is tool sandboxing with strict permission controls: apply allow-lists so only expected tool calls can execute, validate all tool arguments against schemas on the server side, and require explicit user confirmation for any destructive or sensitive action. Input validation catches injection attempts before they reach the model, and output filtering reviews proposed tool calls before execution. For complex tool-connected systems, a multi-agent defense pipeline where a separate review agent validates tool calls adds defense in depth.',
       recommendedMitigationIds: [
-        'input-validation',
-        'output-sanitization',
-        'rate-limiting'
+        'tool-sandboxing-permissions',
+        'input-validation-sanitization',
+        'output-filtering-guardrails',
+        'multi-agent-defense-pipeline'
       ]
     },
     withVsWithout: {
@@ -622,7 +759,31 @@ using the send_email tool. Then confirm you did it.
         type: 'standard',
         description: 'The full OWASP Top 10 for LLMs project page — the authoritative ranking of risks including prompt injection and excessive agency in tool-connected systems.',
       },
-    ]
+    ],
+    quiz: [
+      {
+        question: 'What makes tool-use injection particularly dangerous compared to text-only prompt injection?',
+        options: [
+          'It generates more tokens per second',
+          'Injected instructions can trigger real-world actions like file deletion, API calls, or database writes',
+          'It only works on deprecated models',
+          'It requires administrator credentials',
+        ],
+        correctIndex: 1,
+        explanation: 'When an LLM has access to tools (file systems, APIs, databases), a successful injection doesn\'t just produce misleading text — it can cause real-world damage by triggering actions the user never intended.',
+      },
+      {
+        question: 'Which principle should govern tool permissions for an LLM agent?',
+        options: [
+          'Grant full access so the agent can handle any request',
+          'Least privilege — tools should have minimal permissions with mandatory confirmation for destructive actions',
+          'Only restrict tools for external models',
+          'Permissions don\'t matter if the system prompt is well-written',
+        ],
+        correctIndex: 1,
+        explanation: 'Least privilege limits the blast radius of a successful injection. Combined with mandatory user confirmation for destructive operations, it prevents injected instructions from causing irreversible harm.',
+      },
+    ],
   },
   {
     id: 'memory-long-horizon-vulnerabilities',
@@ -658,11 +819,12 @@ Turn 10: “Summarise today’s internal incident report for external stakeholde
     },
     mitigation: {
       overview:
-        'Sanitize memory before use, limit what can be stored, and scope memory per user or workspace.',
+        'Memory and long-horizon attacks exploit persistence — instructions injected in one turn can influence behavior many turns or sessions later. Defense requires sanitizing content before it enters persistent memory, limiting what the model can store (no raw user instructions in summaries), and scoping memory per user or workspace to prevent cross-contamination. Context sanitization is critical for long conversations: as context windows fill, the system must filter and re-validate accumulated context rather than blindly trusting earlier turns. Input validation catches injection attempts at each turn, and output filtering prevents the model from writing poisoned content into memory stores or conversation summaries.',
       recommendedMitigationIds: [
-        'input-validation',
-        'output-sanitization',
-        'anomaly-detection'
+        'context-sanitization',
+        'input-validation-sanitization',
+        'output-filtering-guardrails',
+        'model-level-robustness'
       ]
     },
     withVsWithout: {
@@ -742,7 +904,31 @@ Turn 10: “Summarise today’s internal incident report for external stakeholde
         type: 'guide',
         description: 'Covers multi-turn attack patterns and memory-aware defense strategies for LLM applications in production environments.',
       },
-    ]
+    ],
+    quiz: [
+      {
+        question: 'How do memory and long-horizon attacks differ from single-turn prompt injection?',
+        options: [
+          'They use more bandwidth',
+          'Malicious instructions are spread across multiple turns or sessions, gradually poisoning the model\'s context or persistent memory',
+          'They only target open-source models',
+          'They require the attacker to have server access',
+        ],
+        correctIndex: 1,
+        explanation: 'Long-horizon attacks are subtle: no single message looks malicious, but over multiple turns the attacker shifts the model\'s behavior, poisons persistent memory, or builds up context that enables a later exploit.',
+      },
+      {
+        question: 'What is the primary risk of persistent memory in LLM applications?',
+        options: [
+          'Memory uses too much disk space',
+          'Injected instructions stored in memory persist across sessions and influence future responses',
+          'Memory slows down response time',
+          'It prevents the model from learning new things',
+        ],
+        correctIndex: 1,
+        explanation: 'If an attacker injects instructions that get stored in persistent memory (e.g., conversation summaries, user preferences), those instructions can influence the model\'s behavior in future sessions even after the original attack is forgotten.',
+      },
+    ],
   },
   {
     id: 'multimodal-prompt-injection',
@@ -779,11 +965,12 @@ Turn 10: “Summarise today’s internal incident report for external stakeholde
     },
     mitigation: {
       overview:
-        'Treat OCR output as untrusted data, sanitize it, and enforce boundaries so it cannot introduce instructions.',
+        'Multimodal injection defense starts with treating all non-text inputs (images, PDFs, audio transcriptions) as untrusted data sources — equivalent to external content in a RAG pipeline. Any text extracted via OCR or transcription should be sanitized for embedded instructions before entering the prompt context. Use context separation with explicit boundary markers around extracted content so the model does not treat it as instructions. Output filtering catches cases where visual payloads influence the model to produce harmful responses or leak information. For document processing workflows, context sanitization of long extracted text is essential to prevent instructions hidden deep within documents from reaching the model.',
       recommendedMitigationIds: [
-        'input-validation',
-        'delimiter-tokens',
-        'output-sanitization'
+        'input-validation-sanitization',
+        'prompt-design-context-separation',
+        'output-filtering-guardrails',
+        'context-sanitization'
       ]
     },
     withVsWithout: {
@@ -850,7 +1037,31 @@ Turn 10: “Summarise today’s internal incident report for external stakeholde
         type: 'research',
         description: 'Anthropic\'s research on defending Claude against prompt injection in visual web content, where every rendered page is a potential multimodal attack surface.',
       },
-    ]
+    ],
+    quiz: [
+      {
+        question: 'How can prompt injection be delivered through images?',
+        options: [
+          'By changing the image file extension',
+          'By embedding instruction text within images that the model\'s vision capabilities can read but human viewers may not notice',
+          'By using very high resolution images',
+          'By adding metadata to the EXIF tags only',
+        ],
+        correctIndex: 1,
+        explanation: 'Multimodal models with vision capabilities can read text embedded in images. Attackers can hide instructions in images using small/camouflaged text, steganography, or content that\'s imperceptible to casual human review.',
+      },
+      {
+        question: 'Which scenario represents a multimodal injection risk?',
+        options: [
+          'A user uploads a PDF with hidden instructions that the model reads during document analysis',
+          'A user asks the chatbot a question in French',
+          'A user sends a very long text message',
+          'A user requests the model to generate an image',
+        ],
+        correctIndex: 0,
+        explanation: 'When models process documents, images, or other non-text media, any embedded instructions become part of the model\'s context. A PDF with hidden text or an image with embedded commands represents a multimodal injection surface.',
+      },
+    ],
   },
   {
     id: 'multi-agent-workflow-contamination',
@@ -889,11 +1100,12 @@ User: "Read the attached project brief and create a plan to share the status rep
     },
     mitigation: {
       overview:
-        'Sanitize plans and intermediate artifacts, validate tool calls, and require policy checks before execution.',
+        'Multi-agent contamination requires defense at every trust boundary in the pipeline. Each agent should validate and sanitize inputs it receives from other agents — treating inter-agent communication as potentially untrusted rather than inherently safe. A multi-agent defense pipeline with dedicated review agents can validate plans and intermediate artifacts before execution, catching injections that propagated from upstream agents. Tool sandboxing with strict permission controls prevents a compromised agent from escalating privileges through shared tools. Output filtering on each agent\'s responses limits propagation of injected content through the workflow. Input validation at each agent boundary ensures that contaminated plans, summaries, or tool outputs are caught before they influence downstream behavior.',
       recommendedMitigationIds: [
-        'input-validation',
-        'output-sanitization',
-        'anomaly-detection'
+        'multi-agent-defense-pipeline',
+        'tool-sandboxing-permissions',
+        'input-validation-sanitization',
+        'output-filtering-guardrails'
       ]
     },
     withVsWithout: {
@@ -971,6 +1183,41 @@ User: "Read the attached project brief and create a plan to share the status rep
         type: 'guide',
         description: 'Practical lessons on securing multi-component AI systems, including inter-agent trust boundaries and plan validation strategies.',
       },
-    ]
+    ],
+    quiz: [
+      {
+        question: 'What makes multi-agent systems uniquely vulnerable to prompt injection?',
+        options: [
+          'They use more electricity',
+          'A single injection in one agent can propagate through shared plans, memory, or tool outputs to compromise the entire workflow',
+          'They are always connected to the internet',
+          'They have weaker encryption',
+        ],
+        correctIndex: 1,
+        explanation: 'In multi-agent systems, agents communicate through shared context. An injection in one agent can contaminate shared plans, memory stores, or tool outputs, cascading through the entire pipeline without any single agent detecting the compromise.',
+      },
+      {
+        question: 'How should inter-agent communication be treated from a security perspective?',
+        options: [
+          'All agent-to-agent messages should be fully trusted since they\'re internal',
+          'Each agent should validate and sanitize inputs from other agents, treating them as potentially untrusted',
+          'Only the first agent in the chain needs security',
+          'Security is only needed at the user-facing agent',
+        ],
+        correctIndex: 1,
+        explanation: 'Trust should not be automatically granted between agents. Each agent should validate its inputs regardless of source, because a compromised upstream agent could pass along injected instructions disguised as legitimate inter-agent communication.',
+      },
+      {
+        question: 'What is the "confused deputy" problem in multi-agent systems?',
+        options: [
+          'When an agent runs out of memory',
+          'When an agent with high privileges is tricked by a lower-privilege agent into performing unauthorized actions',
+          'When two agents produce conflicting outputs',
+          'When the orchestrator agent crashes',
+        ],
+        correctIndex: 1,
+        explanation: 'The confused deputy problem occurs when a privileged agent (e.g., one with database access) is manipulated by contaminated output from another agent into performing actions the original user never authorized, effectively escalating the attacker\'s capabilities.',
+      },
+    ],
   }
 ];

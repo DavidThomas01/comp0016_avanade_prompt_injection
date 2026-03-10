@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShieldCheck, Sparkles } from 'lucide-react';
+import { ShieldCheck, Sparkles, Menu } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
+import { useIsMobile } from './ui/use-mobile';
 
 type NavItem = {
   to: string;
@@ -8,31 +11,33 @@ type NavItem = {
   isActive: (pathname: string) => boolean;
 };
 
+const NAV_ITEMS: NavItem[] = [
+  {
+    to: '/',
+    label: 'Home',
+    isActive: (p) => p === '/' || p.startsWith('/vulnerability/'),
+  },
+  {
+    to: '/testing',
+    label: 'Testing',
+    isActive: (p) => p.startsWith('/testing'),
+  },
+  {
+    to: '/mitigations',
+    label: 'Mitigations',
+    isActive: (p) => p === '/mitigations' || p.startsWith('/mitigations/'),
+  },
+  {
+    to: '/prompt-enhancer',
+    label: 'Prompt Enhancer',
+    isActive: (p) => p.startsWith('/prompt-enhancer'),
+  },
+];
+
 export function Header() {
   const location = useLocation();
-
-  const items: NavItem[] = [
-    {
-      to: '/',
-      label: 'Home',
-      isActive: (p) => p === '/' || p.startsWith('/vulnerability/'),
-    },
-    {
-      to: '/testing',
-      label: 'Testing',
-      isActive: (p) => p.startsWith('/testing'),
-    },
-    {
-      to: '/mitigations',
-      label: 'Mitigations',
-      isActive: (p) => p === '/mitigations' || p.startsWith('/mitigations/'),
-    },
-    {
-      to: '/prompt-enhancer',
-      label: 'Prompt Enhancer',
-      isActive: (p) => p.startsWith('/prompt-enhancer'),
-    },
-  ];
+  const isMobile = useIsMobile();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/60 dark:border-white/10 bg-white/70 dark:bg-gray-950/70 backdrop-blur-xl">
@@ -55,28 +60,66 @@ export function Header() {
           </div>
         </Link>
 
-        <div className="flex items-center gap-2">
-          <nav className="flex items-center gap-1 rounded-full glass px-1 py-1">
-            {items.map((item) => {
-              const active = item.isActive(location.pathname);
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={`px-3 sm:px-4 py-2 rounded-full text-sm transition-all focus-ring ${
-                    active
-                      ? 'bg-orange-600 text-white shadow-sm'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-white/10'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <ThemeToggle />
-        </div>
+        {isMobile ? (
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+              <button
+                type="button"
+                onClick={() => setSheetOpen(true)}
+                className="flex items-center justify-center h-9 w-9 rounded-xl glass hover:bg-white/80 dark:hover:bg-white/10 transition-colors focus-ring"
+              >
+                <Menu className="h-5 w-5 text-foreground" />
+              </button>
+              <SheetContent side="right" className="w-72">
+                <SheetHeader>
+                  <SheetTitle>Navigation</SheetTitle>
+                </SheetHeader>
+                <nav className="flex flex-col gap-1 px-2 mt-2">
+                  {NAV_ITEMS.map((item) => {
+                    const active = item.isActive(location.pathname);
+                    return (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setSheetOpen(false)}
+                        className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all focus-ring ${
+                          active
+                            ? 'bg-orange-600 text-white shadow-sm'
+                            : 'text-foreground hover:bg-white/60 dark:hover:bg-white/10'
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </SheetContent>
+            </Sheet>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <nav className="flex items-center gap-1 rounded-full glass px-1 py-1">
+              {NAV_ITEMS.map((item) => {
+                const active = item.isActive(location.pathname);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className={`px-3 sm:px-4 py-2 rounded-full text-sm transition-all focus-ring ${
+                      active
+                        ? 'bg-orange-600 text-white shadow-sm'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+            <ThemeToggle />
+          </div>
+        )}
       </div>
     </header>
   );
