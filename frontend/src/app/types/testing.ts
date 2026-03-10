@@ -11,11 +11,11 @@ export type ModelSpec = {
   type: ModelType;
   model_id?: string | null;
   endpoint?: string | null;
-  key?: string | null;
   conversation_mode?: 'single' | 'multi' | null;
   message_field?: string | null;
   headers?: Record<string, string> | null;
   payload?: Record<string, unknown> | null;
+  json_schema?: Record<string, unknown> | null;
 };
 
 export type EnvironmentSpec = {

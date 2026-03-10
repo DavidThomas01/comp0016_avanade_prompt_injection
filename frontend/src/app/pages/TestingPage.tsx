@@ -129,6 +129,44 @@ function parsePayload(text: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+function inferJsonSchemaFromValue(value: unknown): Record<string, unknown> {
+  if (value === null) return { type: 'null' };
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return { type: 'array', items: {} };
+    return { type: 'array', items: inferJsonSchemaFromValue(value[0]) };
+  }
+
+  const valueType = typeof value;
+  if (valueType === 'string' || valueType === 'number' || valueType === 'boolean') {
+    return { type: valueType };
+  }
+
+  if (valueType === 'object') {
+    const obj = value as Record<string, unknown>;
+    const properties: Record<string, unknown> = {};
+    const required: string[] = [];
+
+    for (const [key, nestedValue] of Object.entries(obj)) {
+      properties[key] = inferJsonSchemaFromValue(nestedValue);
+      required.push(key);
+    }
+
+    return {
+      type: 'object',
+      properties,
+      required,
+      additionalProperties: true,
+    };
+  }
+
+  return { type: 'string' };
+}
+
+function buildJsonSchemaFromPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return inferJsonSchemaFromValue(payload);
+}
+
 export function TestingPage() {
   const { models, mitigations, isLoading: isLoadingData, error: dataError } = useFetchModelsAndMitigations();
 
@@ -154,7 +192,6 @@ export function TestingPage() {
   const [selectedMitigations, setSelectedMitigations] = useState<string[]>([]);
 
   const [endpoint, setEndpoint] = useState('');
-  const [apiKey, setApiKey] = useState('');
   const [conversationMode, setConversationMode] = useState<ConversationMode>('single');
   const [messageFieldName, setMessageFieldName] = useState('input');
   const [headersText, setHeadersText] = useState('Content-Type: application/json');
@@ -195,7 +232,7 @@ export function TestingPage() {
     newName.trim().length > 0 &&
     (modelType === 'platform'
       ? modelId.trim().length > 0
-      : endpoint.trim().length > 0 && apiKey.trim().length > 0 && messageFieldName.trim().length > 0);
+      : endpoint.trim().length > 0 && messageFieldName.trim().length > 0);
 
   const canRunTest = !!selectedTest && promptOverride.trim().length > 0 && !isRunning;
 
@@ -207,10 +244,9 @@ export function TestingPage() {
     setSystemPrompt('');
     setSelectedMitigations([]);
     setEndpoint('');
-    setApiKey('');
     setConversationMode('single');
     setMessageFieldName('input');
-    setHeadersText('Content-Type: application/json');
+    setHeadersText('Content-Type: application/json\nAuthorization: Bearer <YOUR_SECRET_KEY>');
     setPayloadText('{\n  "input": ""\n}');
     setCreateError(null);
   };
@@ -233,17 +269,19 @@ export function TestingPage() {
     setCreateError(null);
 
     try {
+      const parsedPayload = modelType === 'external' ? parsePayload(payloadText) : null;
+
       const model: ModelSpec =
         modelType === 'platform'
           ? { type: 'platform', model_id: modelId }
           : {
               type: 'external',
               endpoint: endpoint.trim(),
-              key: apiKey.trim(),
               conversation_mode: conversationMode,
               message_field: messageFieldName.trim(),
               headers: parseHeaders(headersText),
-              payload: parsePayload(payloadText),
+              payload: parsedPayload,
+              json_schema: parsedPayload ? buildJsonSchemaFromPayload(parsedPayload) : null,
             };
 
       let environment: EnvironmentSpec | undefined;
@@ -509,6 +547,12 @@ export function TestingPage() {
                             <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Payload Template</div>
                             <pre className="text-xs whitespace-pre-wrap break-words text-foreground">
                               {selectedTest.model.payload ? JSON.stringify(selectedTest.model.payload, null, 2) : '-'}
+                            </pre>
+                          </div>
+                          <div className="bg-background border border-border rounded-lg p-3 md:col-span-2">
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">JSON Schema</div>
+                            <pre className="text-xs whitespace-pre-wrap break-words text-foreground">
+                              {selectedTest.model.json_schema ? JSON.stringify(selectedTest.model.json_schema, null, 2) : '-'}
                             </pre>
                           </div>
                         </>
@@ -873,19 +917,6 @@ export function TestingPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium mb-1">Access Key / Token</label>
-                        <input
-                          type="password"
-                          value={apiKey}
-                          onChange={event => setApiKey(event.target.value)}
-                          placeholder="sk-..."
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
                         <label className="block text-sm font-medium mb-1">Conversation Type</label>
                         <select
                           value={conversationMode}
@@ -942,6 +973,7 @@ export function TestingPage() {
                         className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground font-mono text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
                       />
                     </div>
+
                   </>
                 )}
 
