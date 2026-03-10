@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Copy,
   Download,
+  Pencil,
   Plus,
   RefreshCcw,
   Save,
@@ -293,6 +294,7 @@ export function TestingPage() {
   const [saveConfigError, setSaveConfigError] = useState<string | null>(null);
   const [saveConfigMode, setSaveConfigMode] = useState<'create' | 'update' | 'duplicate'>('create');
   const [createFormSnapshot, setCreateFormSnapshot] = useState<CreateFormSnapshot | null>(null);
+  const [editingTestId, setEditingTestId] = useState<string | null>(null);
 
   const [newName, setNewName] = useState('');
   const [modelType, setModelType] = useState<ModelType>('platform');
@@ -424,6 +426,7 @@ export function TestingPage() {
     setSaveConfigMode('create');
     setCreateFormSnapshot(null);
     setCreateError(null);
+    setEditingTestId(null);
   };
 
   const captureCreateFormSnapshot = (): CreateFormSnapshot => ({
@@ -522,6 +525,18 @@ export function TestingPage() {
     });
     setNewName(`${test.name} Copy`);
     setSaveConfigMode('create');
+    setShowCreateModal(true);
+  };
+
+  const openEditModal = (test: Test) => {
+    resetCreateForm();
+    applyConfigurationToForm({
+      model: test.model,
+      environment: test.environment,
+      runner: test.runner,
+    });
+    setNewName(test.name);
+    setEditingTestId(test.id);
     setShowCreateModal(true);
   };
 
@@ -835,23 +850,36 @@ export function TestingPage() {
     try {
       const draft = buildConfigurationFromForm();
 
-      const newTest = await apiPost<Test>('/tests', {
-        name: newName.trim(),
-        model: draft.model,
-        runner: draft.runner,
-        ...(draft.environment ? { environment: draft.environment } : {}),
-      });
+      if (editingTestId) {
+        const updatedTest = await apiPatch<Test>(`/tests/${editingTestId}`, {
+          name: newName.trim(),
+          model: draft.model,
+          runner: draft.runner,
+          ...(draft.environment ? { environment: draft.environment } : {}),
+        });
+        setTests(prev => prev.map(t => (t.id === updatedTest.id ? updatedTest : t)));
+        if (selectedTest?.id === updatedTest.id) {
+          setSelectedTest(updatedTest);
+        }
+      } else {
+        const newTest = await apiPost<Test>('/tests', {
+          name: newName.trim(),
+          model: draft.model,
+          runner: draft.runner,
+          ...(draft.environment ? { environment: draft.environment } : {}),
+        });
+        setTests(prev => [...prev, newTest]);
+        setSelectedTest(newTest);
+        setChatMessages([]);
+        setRunResult(null);
+        setPromptOverride('');
+      }
 
-      setTests(prev => [...prev, newTest]);
-      setSelectedTest(newTest);
-      setChatMessages([]);
-      setRunResult(null);
-      setPromptOverride('');
       setShowCreateModal(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       setCreateError(message);
-      console.error('Failed to create test:', error);
+      console.error('Failed to save test:', error);
     } finally {
       setIsCreating(false);
     }
@@ -1254,6 +1282,17 @@ export function TestingPage() {
                       <p className="text-sm text-muted-foreground">Current test setup</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {chatMessages.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(selectedTest)}
+                          className="px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-white/10 dark:hover:bg-white/5 inline-flex items-center gap-1.5"
+                          title="Edit this test configuration"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Edit
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => openCreateFromTest(selectedTest)}
@@ -1546,9 +1585,9 @@ export function TestingPage() {
             <div className="glass-strong rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-white/60 dark:border-white/10 p-6">
               <div className="flex items-start justify-between gap-4 mb-6">
                 <div>
-                  <h2 className="text-xl font-semibold">Create Test Setup</h2>
+                  <h2 className="text-xl font-semibold">{editingTestId ? 'Edit Test Setup' : 'Create Test Setup'}</h2>
                   <p className="text-sm text-muted-foreground">
-                    Configure model, runner, and request shape before creating the test.
+                    {editingTestId ? 'Update the test configuration. Changes take effect immediately.' : 'Configure model, runner, and request shape before creating the test.'}
                   </p>
                 </div>
                 <button
@@ -1827,7 +1866,7 @@ export function TestingPage() {
                         : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
                     )}
                   >
-                    {isCreating ? 'Creating...' : 'Create Test'}
+                    {isCreating ? (editingTestId ? 'Saving...' : 'Creating...') : (editingTestId ? 'Save Changes' : 'Create Test')}
                   </button>
                 </div>
               </div>
