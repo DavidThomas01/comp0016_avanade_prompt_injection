@@ -19,6 +19,12 @@ export interface PromptEnhancementResponse {
   createdAt: string;
 }
 
+export interface PromptMitigation {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface Model {
   id: string;
   label: string;
@@ -39,6 +45,17 @@ export interface GetMitigationsResponse {
 }
 
 const getApiBase = () => import.meta.env.VITE_API_BASE || 'http://localhost:8080/api';
+
+export async function getPromptMitigations(): Promise<PromptMitigation[]> {
+  const apiBase = getApiBase();
+  const response = await fetch(`${apiBase}/prompt-enhancements/mitigations`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch mitigations: HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
 
 export async function fetchModels(): Promise<Model[]> {
   const apiBase = getApiBase();
