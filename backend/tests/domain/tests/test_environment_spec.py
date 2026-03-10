@@ -59,11 +59,11 @@ class TestEnvironmentSpec:
         )
         spec.validate()  # Should not raise
 
-    def test_validate_custom_type_without_prompt_raises(self):
-        """Custom environment without system prompt fails validation"""
+    def test_validate_custom_type_with_none_prompt_raises(self):
+        """Custom environment with None prompt fails validation"""
         spec = EnvironmentSpec(
             type=EnvType.CUSTOM,
-            system_prompt="",
+            system_prompt=None,
             mitigations=[]
         )
         

@@ -47,7 +47,7 @@ class TestTestRepository:
         db_test = TestModel(
             id=sample_test.id,
             name=sample_test.name,
-            model={"type": "platform", "model_id": "gpt-5.2", "endpoint": None, "key": None},
+            model={"type": "platform", "model_id": "gpt-5.2", "endpoint": None},
             environment={"type": "custom", "mitigations": None, "system_prompt": "You are helpful"},
             runner={"type": "prompt", "context": [{"role": "system", "content": "Context"}]},
             created_at=sample_test.created_at
@@ -90,8 +90,7 @@ class TestTestRepository:
     def test_create_handles_none_environment(self, repository, mock_session):
         """Test create handles test without environment"""
         model = ModelSpec.create_external(
-            endpoint="https://api.example.com",
-            key="sk-test"
+            endpoint="https://api.example.com"
         )
         runner = RunnerSpec.create_prompt()
         test = Test.create(
@@ -181,7 +180,7 @@ class TestTestRepository:
         db_test_2 = TestModel(
             id="test_2",
             name="Test 2",
-            model={"type": "platform", "model_id": "gpt-4", "endpoint": None, "key": None},
+            model={"type": "platform", "model_id": "gpt-4", "endpoint": None},
             environment=None,
             runner={"type": "prompt", "context": []},
             created_at=datetime.now()
@@ -269,7 +268,7 @@ class TestTestRepository:
         db_test = TestModel(
             id="test_external",
             name="External Test",
-            model={"type": "external", "model_id": None, "endpoint": "https://api.example.com", "key": "sk-test"},
+            model={"type": "external", "model_id": None, "endpoint": "https://api.example.com"},
             environment=None,
             runner={"type": "prompt", "context": []},
             created_at=datetime.now()
@@ -287,7 +286,6 @@ class TestTestRepository:
             "type": "platform",
             "model_id": "gpt-5.2",
             "endpoint": None,
-            "key": None
         }
         
         result = repository._model_to_domain(model_dict)
@@ -341,8 +339,7 @@ class TestTestRepository:
     def test_create_with_external_model(self, repository, mock_session):
         """Test create works with external model"""
         model = ModelSpec.create_external(
-            endpoint="https://api.example.com/v1/chat",
-            key="sk-external-key-123"
+            endpoint="https://api.example.com/v1/chat"
         )
         runner = RunnerSpec.create_prompt()
         test = Test.create(
@@ -356,7 +353,7 @@ class TestTestRepository:
         
         db_test = mock_session.add.call_args[0][0]
         assert db_test.model["endpoint"] == "https://api.example.com/v1/chat"
-        assert db_test.model["key"] == "sk-external-key-123"
+        assert db_test.model.get("headers") is None
         assert db_test.environment is None
 
     def test_create_with_mitigation_environment(self, repository, mock_session):

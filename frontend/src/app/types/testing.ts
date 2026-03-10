@@ -13,6 +13,7 @@ export type ModelSpec = {
   endpoint?: string | null;
   conversation_mode?: 'single' | 'multi' | null;
   message_field?: string | null;
+  response_text_path?: string | null;
   headers?: Record<string, string> | null;
   payload?: Record<string, unknown> | null;
   json_schema?: Record<string, unknown> | null;
@@ -21,7 +22,7 @@ export type ModelSpec = {
 export type EnvironmentSpec = {
   type: EnvType;
   system_prompt: string;
-  mitigations: string[];
+  mitigations?: string[];
 };
 
 export type RunnerSpec = {
@@ -36,6 +37,15 @@ export type Test = {
   environment?: EnvironmentSpec | null;
   runner: RunnerSpec;
   created_at?: string;
+};
+
+export type SavedTestConfig = {
+  id: string;
+  name: string;
+  model: ModelSpec;
+  environment?: EnvironmentSpec | null;
+  runner: RunnerSpec;
+  created_at: string;
 };
 
 export type TestAnalysis = {

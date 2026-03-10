@@ -14,7 +14,7 @@ class TestModelSpec:
         assert spec.type == ModelType.PLATFORM
         assert spec.model_id == "gpt-5.2"
         assert spec.endpoint is None
-        assert spec.key is None
+        assert spec.headers is None
 
     def test_create_platform_model_missing_id_raises(self):
         """Platform model without model_id raises InvalidModelConfiguration"""
@@ -22,26 +22,23 @@ class TestModelSpec:
             ModelSpec.create_platform(model_id=None)
 
     def test_create_external_model_success(self):
-        """External model can be created with endpoint and key"""
+        """External model can be created with endpoint"""
         spec = ModelSpec.create_external(
             endpoint="https://api.example.com/v1",
-            key="sk-test-key"
+            headers={"Authorization": "Bearer token"},
+            response_text_path="choices.0.message.content",
         )
         
         assert spec.type == ModelType.EXTERNAL
         assert spec.endpoint == "https://api.example.com/v1"
-        assert spec.key == "sk-test-key"
+        assert spec.headers == {"Authorization": "Bearer token"}
+        assert spec.response_text_path == "choices.0.message.content"
         assert spec.model_id is None
 
     def test_create_external_model_missing_endpoint_raises(self):
         """External model without endpoint raises InvalidModelConfiguration"""
-        with pytest.raises(InvalidModelConfiguration, match="missing endpoint or key"):
-            ModelSpec.create_external(endpoint=None, key="sk-test")
-
-    def test_create_external_model_missing_key_raises(self):
-        """External model without key raises InvalidModelConfiguration"""
-        with pytest.raises(InvalidModelConfiguration, match="missing endpoint or key"):
-            ModelSpec.create_external(endpoint="https://api.example.com", key=None)
+        with pytest.raises(InvalidModelConfiguration, match="missing endpoint"):
+            ModelSpec.create_external(endpoint=None)
 
     def test_validate_platform_model_success(self):
         """Valid platform model passes validation"""
@@ -54,7 +51,6 @@ class TestModelSpec:
             type=ModelType.PLATFORM,
             model_id="gpt-5.2",
             endpoint="https://custom.com",
-            key=None
         )
         
         with pytest.raises(InvalidModelConfiguration, match="cannot include custom endpoint"):
@@ -64,7 +60,7 @@ class TestModelSpec:
         """Valid external model passes validation"""
         spec = ModelSpec.create_external(
             endpoint="https://api.example.com",
-            key="sk-test"
+            headers={"Authorization": "Bearer token"},
         )
         spec.validate()  # Should not raise
 
@@ -74,10 +70,10 @@ class TestModelSpec:
             type=ModelType.EXTERNAL,
             model_id="gpt-5.2",
             endpoint="https://api.example.com",
-            key="sk-test"
+            headers={"Authorization": "Bearer token"},
         )
         
-        with pytest.raises(InvalidModelConfiguration, match="cannot include model id"):
+        with pytest.raises(InvalidModelConfiguration, match="cannot include model_id"):
             spec.validate()
 
     def test_model_spec_is_frozen(self):

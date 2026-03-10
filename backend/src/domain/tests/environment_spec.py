@@ -41,7 +41,7 @@ class EnvironmentSpec:
                 raise InvalidModelConfiguration("mitigation setup requires a mitigations list")
 
         if self.type == EnvType.CUSTOM:
-            if not self.system_prompt:
+            if self.system_prompt is None:
                 raise InvalidModelConfiguration("custom setup requires custom system prompt")
             if self.mitigations:
                 raise InvalidModelConfiguration("custom setup cannot include mitigations")

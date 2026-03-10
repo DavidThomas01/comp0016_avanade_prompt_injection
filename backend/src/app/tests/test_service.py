@@ -1,11 +1,12 @@
 from sqlalchemy.orm import Session
 from domain.prompt.compiler import PromptCompiler
-from domain.providers import Message
+from domain.providers import ExternalModelRequest, Message, ModelResponse
 from domain.tests import *
 from infra.config.models import MODEL_REGISTRY
 from infra.config.mitigations import MITIGATION_REGISTRY
 from infra.persistance.repositories.test_repository import TestRepository
 from app.routers.runner_router import RunnerRouter
+from infra.providers.external_http_provider import ExternalHttpProvider
 
 from .dto import *
 
@@ -65,11 +66,31 @@ class TestService():
                 endpoint=model_spec_input.endpoint,
                 conversation_mode=model_spec_input.conversation_mode or "single",
                 message_field=model_spec_input.message_field or "input",
+                response_text_path=model_spec_input.response_text_path,
                 headers=model_spec_input.headers,
                 payload=model_spec_input.payload,
                 json_schema=model_spec_input.json_schema,
             )
         raise InvalidModelConfiguration(f"invalid model type: {model_spec_input.type}")
+
+
+    async def validate_external_model(self, model_spec_input: ModelSpecInput, prompt: str) -> ModelResponse:
+        model_spec = self._build_model(model_spec_input)
+        if model_spec.type != ModelType.EXTERNAL:
+            raise InvalidModelConfiguration("validate_external_model requires external model type")
+
+        provider = ExternalHttpProvider()
+        request = ExternalModelRequest(
+            endpoint=model_spec.endpoint,
+            messages=[Message(role="user", content=prompt)],
+            conversation_mode=model_spec.conversation_mode or "single",
+            message_field=model_spec.message_field or "input",
+            response_text_path=model_spec.response_text_path,
+            headers=model_spec.headers,
+            payload=model_spec.payload,
+            json_schema=model_spec.json_schema,
+        )
+        return await provider.generate(request)
     
         
     def _build_environment(self, environment_spec_input: EnvironmentSpecInput) -> EnvironmentSpec:

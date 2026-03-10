@@ -43,7 +43,7 @@ def create_test(request: CreateTestRequest, db: Session = Depends(get_db), test_
 @router.patch("/{test_id}")
 def update_test(test_id: str, request: UpdateTestRequest, db: Session = Depends(get_db), test_service: TestService = Depends(get_test_service)):
     try:
-        test_service.update(db, test_id, request.to_dto())
+        return test_service.update(db, test_id, request.to_dto())
     except (InvalidModelConfiguration, TypeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except NotFoundError as e:
@@ -80,3 +80,18 @@ async def run_test(test_id: str, request: RunTestRequest, db: Session = Depends(
         raise HTTPException(status_code=404, detail=str(e))
     except InvalidModelConfiguration as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/validate-external", response_model=ValidateExternalModelResponse)
+async def validate_external_model(
+    request: ValidateExternalModelRequest,
+    test_service: TestService = Depends(get_test_service),
+):
+    try:
+        model_input, prompt = request.to_dto()
+        result = await test_service.validate_external_model(model_input, prompt)
+        return ValidateExternalModelResponse(output=result.text, raw=result.raw)
+    except (InvalidModelConfiguration, TypeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))

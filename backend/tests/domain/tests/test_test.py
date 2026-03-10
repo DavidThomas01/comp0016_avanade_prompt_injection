@@ -37,8 +37,7 @@ class TestTestEntity:
     def test_create_test_with_external_model_without_environment(self):
         """Test can be created with external model without environment"""
         model = ModelSpec.create_external(
-            endpoint="https://api.example.com",
-            key="sk-test"
+            endpoint="https://api.example.com"
         )
         runner = RunnerSpec.create_prompt()
         
@@ -71,8 +70,7 @@ class TestTestEntity:
     def test_create_test_external_model_with_environment_raises(self):
         """Creating test with external model and environment raises error"""
         model = ModelSpec.create_external(
-            endpoint="https://api.example.com",
-            key="sk-test"
+            endpoint="https://api.example.com"
         )
         environment = EnvironmentSpec.create_from_system_prompt(
             system_prompt="You are helpful."

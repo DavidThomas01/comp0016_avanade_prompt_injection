@@ -16,8 +16,8 @@ def ctx():
     mock_repo = Mock()
     
     mock_repo.create.side_effect = lambda db, test: test
-    mock_repo.delete_by_id.side_effect = lambda db, id: id is not "missing"
-    mock_repo.get_by_id.side_effect = lambda db, id: generate_test(id) if id is not "missing" else None
+    mock_repo.delete_by_id.side_effect = lambda db, id: id != "missing"
+    mock_repo.get_by_id.side_effect = lambda db, id: generate_test(id) if id != "missing" else None
     mock_repo.update.side_effect = lambda db, test: test
     mock_repo.list_all.return_value = [generate_test("test_1"), generate_test("test_2"), generate_test("test_3")]
     
@@ -86,8 +86,7 @@ def test_create_invalid_test_failure(ctx):
         name="Test",
         model=ModelSpecInput(
             type=ModelType.EXTERNAL,
-            endpoint="Endpoint",
-            key="Key"
+            endpoint="Endpoint"
         ),
         runner=RunnerSpecInput(
             type=RunnerType.FRAMEWORK
@@ -124,8 +123,7 @@ def test_update_test_success(ctx):
         name="Updated Test",
         model=ModelSpecInput(
             type=ModelType.EXTERNAL,
-            endpoint="Endpoint",
-            key="Key"
+            endpoint="Endpoint"
         ),
         runner=RunnerSpecInput(
             type=RunnerType.FRAMEWORK
@@ -138,7 +136,7 @@ def test_update_test_success(ctx):
     assert response.name == "Updated Test"
     assert response.model.type == ModelType.EXTERNAL
     assert response.model.endpoint == "Endpoint"
-    assert response.model.key == "Key"
+    assert response.model.headers is None
     assert response.runner.type == RunnerType.FRAMEWORK
     assert response.environment == None
     

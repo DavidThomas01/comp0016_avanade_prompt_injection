@@ -42,8 +42,7 @@ class TestPromptRunner:
     def external_test(self):
         """Create a test with external model"""
         model = ModelSpec.create_external(
-            endpoint="https://api.example.com/chat",
-            key="sk-test-key"
+            endpoint="https://api.example.com/chat"
         )
         runner_spec = RunnerSpec.create_prompt(context=[])
         return Test.create(
@@ -263,16 +262,15 @@ class TestPromptRunner:
         mock_response = ModelResponse(text="External response")
         mock_provider.generate.return_value = mock_response
         
-        with patch('infra.tests.runners.prompt_runner.ExternalModelProvider', return_value=mock_provider):
+        with patch('infra.tests.runners.prompt_runner.ExternalHttpProvider', return_value=mock_provider):
             result = await runner._run_test_on_external_model(external_test, sample_prompt)
             
             # Verify provider.generate was called
             mock_provider.generate.assert_called_once()
             request = mock_provider.generate.call_args[0][0]
             
-            # Verify request has correct endpoint and key
+            # Verify request has correct endpoint
             assert request.endpoint == external_test.model.endpoint
-            assert request.key == external_test.model.key
             assert sample_prompt in request.messages
             assert result == mock_response
 
