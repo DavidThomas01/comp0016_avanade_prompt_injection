@@ -470,11 +470,18 @@ export function TestingPage() {
       const hasSystemPrompt = systemPrompt.trim().length > 0;
       const hasMitigations = selectedMitigations.length > 0;
 
-      environment = {
-        type: hasSystemPrompt && !hasMitigations ? 'custom' : 'mitigation',
-        system_prompt: systemPrompt.trim(),
-        mitigations: selectedMitigations,
-      };
+      if (hasMitigations) {
+        environment = {
+          type: 'mitigation',
+          system_prompt: systemPrompt.trim(),
+          mitigations: selectedMitigations,
+        };
+      } else {
+        environment = {
+          type: 'custom',
+          system_prompt: systemPrompt.trim(),
+        };
+      }
     }
 
     return {
