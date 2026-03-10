@@ -206,7 +206,7 @@ export function MitigationsPage() {
                     <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{selected.description}</p>
                   </div>
                   <span
-                    className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+                    className={`shrink-0 whitespace-nowrap text-xs font-semibold px-3 py-1 rounded-full border ${
                       selected.codeBased
                         ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
                         : 'bg-gray-900/5 dark:bg-white/5 text-muted-foreground border-gray-900/10 dark:border-white/10'
