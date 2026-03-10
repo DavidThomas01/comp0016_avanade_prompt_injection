@@ -4,11 +4,14 @@ import {
   Bot,
   CheckCircle2,
   ChevronDown,
+  Copy,
   Download,
   Plus,
   RefreshCcw,
+  Save,
   Send,
   Trash2,
+  Upload,
   User,
 } from 'lucide-react';
 
@@ -24,6 +27,7 @@ import type {
   ModelType,
   RunResult,
   RunnerType,
+  SavedTestConfig,
   Test,
 } from '../types/testing';
 
@@ -41,6 +45,20 @@ const LOADING_INTERVAL_MS = 3200;
 const API_BASE = 'http://localhost:8080/api';
 
 type ConversationMode = 'single' | 'multi';
+
+type CreateFormSnapshot = {
+  newName: string;
+  modelType: ModelType;
+  modelId: string;
+  runnerType: RunnerType;
+  systemPrompt: string;
+  selectedMitigations: string[];
+  endpoint: string;
+  conversationMode: ConversationMode;
+  messageFieldName: string;
+  headersText: string;
+  payloadText: string;
+};
 
 const makeId = () => `msg_${Math.random().toString(36).slice(2, 10)}`;
 
@@ -66,6 +84,17 @@ function useRotatingMessage(active: boolean) {
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
@@ -167,6 +196,16 @@ function buildJsonSchemaFromPayload(payload: Record<string, unknown>): Record<st
   return inferJsonSchemaFromValue(payload);
 }
 
+function formatHeaders(headers: Record<string, string> | null | undefined): string {
+  if (!headers || Object.keys(headers).length === 0) {
+    return 'Content-Type: application/json';
+  }
+
+  return Object.entries(headers)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\n');
+}
+
 export function TestingPage() {
   const { models, mitigations, isLoading: isLoadingData, error: dataError } = useFetchModelsAndMitigations();
 
@@ -181,8 +220,19 @@ export function TestingPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showManageConfigModal, setShowManageConfigModal] = useState(false);
+  const [showSaveConfigModal, setShowSaveConfigModal] = useState(false);
   const [showConfig, setShowConfig] = useState(true);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [savedConfigs, setSavedConfigs] = useState<SavedTestConfig[]>([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(true);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [selectedConfigId, setSelectedConfigId] = useState('');
+  const [showConfigActionsMenu, setShowConfigActionsMenu] = useState(false);
+  const [configNameDraft, setConfigNameDraft] = useState('');
+  const [saveConfigError, setSaveConfigError] = useState<string | null>(null);
+  const [saveConfigMode, setSaveConfigMode] = useState<'create' | 'update' | 'duplicate'>('create');
+  const [createFormSnapshot, setCreateFormSnapshot] = useState<CreateFormSnapshot | null>(null);
 
   const [newName, setNewName] = useState('');
   const [modelType, setModelType] = useState<ModelType>('platform');
@@ -200,6 +250,7 @@ export function TestingPage() {
 
   const loadingMessage = useRotatingMessage(isRunning);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const configActionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (models.length > 0 && !modelId) {
@@ -223,16 +274,64 @@ export function TestingPage() {
   }, []);
 
   useEffect(() => {
+    const loadConfigs = async () => {
+      try {
+        const data = await apiGet<SavedTestConfig[]>('/test-configs');
+        const configs = data || [];
+        setSavedConfigs(configs);
+        if (configs.length > 0) {
+          setSelectedConfigId(configs[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to load saved configurations:', error);
+      } finally {
+        setLoadingConfigs(false);
+      }
+    };
+
+    void loadConfigs();
+  }, []);
+
+  useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [chatMessages, isRunning]);
+
+  useEffect(() => {
+    if (!showConfigActionsMenu) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!configActionsRef.current) return;
+      if (!configActionsRef.current.contains(event.target as Node)) {
+        setShowConfigActionsMenu(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowConfigActionsMenu(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showConfigActionsMenu]);
 
   const canCreateTest =
     newName.trim().length > 0 &&
     (modelType === 'platform'
       ? modelId.trim().length > 0
       : endpoint.trim().length > 0 && messageFieldName.trim().length > 0);
+  const canSaveConfiguration =
+    modelType === 'platform'
+      ? modelId.trim().length > 0
+      : endpoint.trim().length > 0 && messageFieldName.trim().length > 0;
 
   const canRunTest = !!selectedTest && promptOverride.trim().length > 0 && !isRunning;
 
@@ -248,11 +347,99 @@ export function TestingPage() {
     setMessageFieldName('input');
     setHeadersText('Content-Type: application/json\nAuthorization: Bearer <YOUR_SECRET_KEY>');
     setPayloadText('{\n  "input": ""\n}');
+    setShowSaveConfigModal(false);
+    setShowManageConfigModal(false);
+    setShowConfigActionsMenu(false);
+    setConfigNameDraft('');
+    setSaveConfigError(null);
+    setSaveConfigMode('create');
+    setCreateFormSnapshot(null);
     setCreateError(null);
+  };
+
+  const captureCreateFormSnapshot = (): CreateFormSnapshot => ({
+    newName,
+    modelType,
+    modelId,
+    runnerType,
+    systemPrompt,
+    selectedMitigations: [...selectedMitigations],
+    endpoint,
+    conversationMode,
+    messageFieldName,
+    headersText,
+    payloadText,
+  });
+
+  const restoreCreateFormSnapshot = () => {
+    if (!createFormSnapshot) return;
+
+    setNewName(createFormSnapshot.newName);
+    setModelType(createFormSnapshot.modelType);
+    setModelId(createFormSnapshot.modelId);
+    setRunnerType(createFormSnapshot.runnerType);
+    setSystemPrompt(createFormSnapshot.systemPrompt);
+    setSelectedMitigations(createFormSnapshot.selectedMitigations);
+    setEndpoint(createFormSnapshot.endpoint);
+    setConversationMode(createFormSnapshot.conversationMode);
+    setMessageFieldName(createFormSnapshot.messageFieldName);
+    setHeadersText(createFormSnapshot.headersText);
+    setPayloadText(createFormSnapshot.payloadText);
+  };
+
+  const applyConfigurationToForm = (config: {
+    model: ModelSpec;
+    environment?: EnvironmentSpec | null;
+    runner: { type: RunnerType; context?: unknown[] };
+  }) => {
+    setModelType(config.model.type);
+
+    if (config.model.type === 'platform') {
+      setModelId(config.model.model_id || (models.length > 0 ? models[0].id : ''));
+      setRunnerType(config.runner.type || 'prompt');
+
+      if (config.environment) {
+        setSystemPrompt(config.environment.system_prompt || '');
+        setSelectedMitigations(config.environment.mitigations || []);
+      } else {
+        setSystemPrompt('');
+        setSelectedMitigations([]);
+      }
+
+      setEndpoint('');
+      setConversationMode('single');
+      setMessageFieldName('input');
+      setHeadersText('Content-Type: application/json');
+      setPayloadText('{\n  "input": ""\n}');
+      return;
+    }
+
+    setEndpoint(config.model.endpoint || '');
+    setConversationMode((config.model.conversation_mode as ConversationMode) || 'single');
+    setMessageFieldName(config.model.message_field || 'input');
+    setHeadersText(formatHeaders(config.model.headers));
+    setPayloadText(config.model.payload ? JSON.stringify(config.model.payload, null, 2) : '{\n  "input": ""\n}');
+
+    setRunnerType('prompt');
+    setSystemPrompt('');
+    setSelectedMitigations([]);
+  };
+
+  const openCreateFromTest = (test: Test) => {
+    resetCreateForm();
+    applyConfigurationToForm({
+      model: test.model,
+      environment: test.environment,
+      runner: test.runner,
+    });
+    setNewName(`${test.name} Copy`);
+    setSaveConfigMode('create');
+    setShowCreateModal(true);
   };
 
   const openCreateModal = () => {
     resetCreateForm();
+    setSaveConfigMode('create');
     setShowCreateModal(true);
   };
 
@@ -262,6 +449,224 @@ export function TestingPage() {
     );
   };
 
+  const buildConfigurationFromForm = () => {
+    const parsedPayload = modelType === 'external' ? parsePayload(payloadText) : null;
+
+    const model: ModelSpec =
+      modelType === 'platform'
+        ? { type: 'platform', model_id: modelId }
+        : {
+            type: 'external',
+            endpoint: endpoint.trim(),
+            conversation_mode: conversationMode,
+            message_field: messageFieldName.trim(),
+            headers: parseHeaders(headersText),
+            payload: parsedPayload,
+            json_schema: parsedPayload ? buildJsonSchemaFromPayload(parsedPayload) : null,
+          };
+
+    let environment: EnvironmentSpec | undefined;
+    if (modelType === 'platform' && runnerType === 'prompt') {
+      const hasSystemPrompt = systemPrompt.trim().length > 0;
+      const hasMitigations = selectedMitigations.length > 0;
+
+      environment = {
+        type: hasSystemPrompt && !hasMitigations ? 'custom' : 'mitigation',
+        system_prompt: systemPrompt.trim(),
+        mitigations: selectedMitigations,
+      };
+    }
+
+    return {
+      model,
+      environment,
+      runner: {
+        type: runnerType,
+        context: [],
+      },
+    };
+  };
+
+  const openSaveConfigurationDialog = () => {
+    const selected = savedConfigs.find(item => item.id === selectedConfigId);
+    if (saveConfigMode === 'update' && selected) {
+      setConfigNameDraft(selected.name);
+    } else if (saveConfigMode === 'duplicate' && selected) {
+      setConfigNameDraft(`${selected.name} Copy`);
+    } else {
+      const suggestedName = newName.trim() ? `${newName.trim()} Config` : 'New Configuration';
+      setConfigNameDraft(suggestedName);
+    }
+
+    setSaveConfigError(null);
+    setShowSaveConfigModal(true);
+  };
+
+  const prepareUpdateConfiguration = () => {
+    const selected = savedConfigs.find(item => item.id === selectedConfigId);
+    if (!selected) {
+      setCreateError('Select a saved configuration first.');
+      return;
+    }
+
+    setCreateFormSnapshot(captureCreateFormSnapshot());
+    applyConfigurationToForm({
+      model: selected.model,
+      environment: selected.environment,
+      runner: selected.runner,
+    });
+    setConfigNameDraft(selected.name);
+    setCreateError(null);
+    setSaveConfigMode('update');
+    setShowCreateModal(true);
+    setShowManageConfigModal(true);
+  };
+
+  const prepareDuplicateConfiguration = () => {
+    const selected = savedConfigs.find(item => item.id === selectedConfigId);
+    if (!selected) {
+      setCreateError('Select a saved configuration first.');
+      return;
+    }
+
+    setCreateFormSnapshot(captureCreateFormSnapshot());
+    applyConfigurationToForm({
+      model: selected.model,
+      environment: selected.environment,
+      runner: selected.runner,
+    });
+    setConfigNameDraft(`${selected.name} Copy`);
+    setCreateError(null);
+    setSaveConfigMode('duplicate');
+    setShowCreateModal(true);
+    setShowManageConfigModal(true);
+  };
+
+  const saveCurrentConfiguration = async (configName: string) => {
+
+    setIsSavingConfig(true);
+    setCreateError(null);
+
+    try {
+      const selected = savedConfigs.find(item => item.id === selectedConfigId);
+
+      if (saveConfigMode === 'update') {
+        if (!selected) {
+          throw new Error('Select a saved configuration first.');
+        }
+
+        const draft = buildConfigurationFromForm();
+        const updated = await apiPatch<SavedTestConfig>(`/test-configs/${selected.id}`, {
+          name: configName,
+          model: draft.model,
+          environment: draft.environment,
+          runner: draft.runner,
+        });
+
+        setSavedConfigs(prev => prev.map(item => (item.id === updated.id ? updated : item)));
+        setSelectedConfigId(updated.id);
+      } else if (saveConfigMode === 'duplicate') {
+        if (!selected) {
+          throw new Error('Select a saved configuration first.');
+        }
+
+        const draft = buildConfigurationFromForm();
+        const duplicated = await apiPost<SavedTestConfig>('/test-configs', {
+          name: configName,
+          model: draft.model,
+          environment: draft.environment,
+          runner: draft.runner,
+        });
+
+        setSavedConfigs(prev => [duplicated, ...prev]);
+        setSelectedConfigId(duplicated.id);
+      } else {
+        const draft = buildConfigurationFromForm();
+        const saved = await apiPost<SavedTestConfig>('/test-configs', {
+          name: configName,
+          model: draft.model,
+          environment: draft.environment,
+          runner: draft.runner,
+        });
+
+        setSavedConfigs(prev => [saved, ...prev]);
+        setSelectedConfigId(saved.id);
+      }
+
+      setShowSaveConfigModal(false);
+      setShowManageConfigModal(false);
+      setShowCreateModal(true);
+      restoreCreateFormSnapshot();
+      setConfigNameDraft('');
+      setSaveConfigError(null);
+      setSaveConfigMode('create');
+      setCreateFormSnapshot(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setSaveConfigError(`Could not save configuration: ${message}`);
+      console.error('Failed to save configuration:', error);
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  const confirmSaveConfiguration = async () => {
+    const configName = configNameDraft.trim();
+    if (!configName) {
+      setSaveConfigError('Configuration name is required.');
+      return;
+    }
+    await saveCurrentConfiguration(configName);
+  };
+
+  const saveFromManageModal = async () => {
+    const configName = configNameDraft.trim();
+    if (!configName) {
+      setSaveConfigError('Configuration name is required.');
+      return;
+    }
+    await saveCurrentConfiguration(configName);
+  };
+
+  const deleteSelectedConfiguration = async () => {
+    const selected = savedConfigs.find(item => item.id === selectedConfigId);
+    if (!selected) {
+      setCreateError('Select a saved configuration first.');
+      return;
+    }
+
+    try {
+      await apiDelete(`/test-configs/${selected.id}`);
+      setSavedConfigs(prev => {
+        const next = prev.filter(item => item.id !== selected.id);
+        setSelectedConfigId(next.length > 0 ? next[0].id : '');
+        return next;
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setCreateError(`Could not delete configuration: ${message}`);
+      console.error('Failed to delete configuration:', error);
+    }
+  };
+
+  const loadSelectedConfiguration = () => {
+    const config = savedConfigs.find(item => item.id === selectedConfigId);
+    if (!config) {
+      setCreateError('Select a saved configuration first.');
+      return;
+    }
+
+    applyConfigurationToForm({
+      model: config.model,
+      environment: config.environment,
+      runner: config.runner,
+    });
+    if (!newName.trim()) {
+      setNewName(`${config.name} Test`);
+    }
+    setCreateError(null);
+  };
+
   const createTest = async () => {
     if (!canCreateTest) return;
 
@@ -269,41 +674,13 @@ export function TestingPage() {
     setCreateError(null);
 
     try {
-      const parsedPayload = modelType === 'external' ? parsePayload(payloadText) : null;
-
-      const model: ModelSpec =
-        modelType === 'platform'
-          ? { type: 'platform', model_id: modelId }
-          : {
-              type: 'external',
-              endpoint: endpoint.trim(),
-              conversation_mode: conversationMode,
-              message_field: messageFieldName.trim(),
-              headers: parseHeaders(headersText),
-              payload: parsedPayload,
-              json_schema: parsedPayload ? buildJsonSchemaFromPayload(parsedPayload) : null,
-            };
-
-      let environment: EnvironmentSpec | undefined;
-      if (modelType === 'platform' && runnerType === 'prompt') {
-        const hasSystemPrompt = systemPrompt.trim().length > 0;
-        const hasMitigations = selectedMitigations.length > 0;
-
-        environment = {
-          type: hasSystemPrompt && !hasMitigations ? 'custom' : 'mitigation',
-          system_prompt: systemPrompt.trim(),
-          mitigations: selectedMitigations,
-        };
-      }
+      const draft = buildConfigurationFromForm();
 
       const newTest = await apiPost<Test>('/tests', {
         name: newName.trim(),
-        model,
-        runner: {
-          type: runnerType,
-          context: [],
-        },
-        ...(environment ? { environment } : {}),
+        model: draft.model,
+        runner: draft.runner,
+        ...(draft.environment ? { environment: draft.environment } : {}),
       });
 
       setTests(prev => [...prev, newTest]);
@@ -478,6 +855,16 @@ export function TestingPage() {
                       <button
                         onClick={event => {
                           event.stopPropagation();
+                          openCreateFromTest(test);
+                        }}
+                        className="px-1 py-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                        title="Duplicate configuration"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={event => {
+                          event.stopPropagation();
                           void deleteTest(test.id);
                         }}
                         className="px-1 py-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -496,16 +883,40 @@ export function TestingPage() {
             {selectedTest ? (
               <>
                 <div className="glass-strong p-6 rounded-xl">
-                  <button
-                    onClick={() => setShowConfig(prev => !prev)}
-                    className="w-full inline-flex items-center justify-between text-left"
-                  >
+                  <div className="w-full inline-flex items-start justify-between gap-3">
                     <div>
                       <h2 className="text-lg font-semibold">Configuration</h2>
                       <p className="text-sm text-muted-foreground">Current test setup</p>
                     </div>
-                    <ChevronDown className={cn('w-5 h-5 transition-transform', showConfig ? 'rotate-180' : 'rotate-0')} />
-                  </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openCreateFromTest(selectedTest)}
+                        className="px-3 py-1.5 text-sm rounded-md border border-border bg-background hover:bg-white/10 dark:hover:bg-white/5 inline-flex items-center gap-1.5"
+                        title="Duplicate this test configuration"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        Duplicate
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteTest(selectedTest.id)}
+                        className="px-3 py-1.5 text-sm rounded-md border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 inline-flex items-center gap-1.5"
+                        title="Delete this test"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowConfig(prev => !prev)}
+                        className="p-2 rounded-md border border-border bg-background hover:bg-white/10 dark:hover:bg-white/5"
+                        title={showConfig ? 'Hide configuration' : 'Show configuration'}
+                      >
+                        <ChevronDown className={cn('w-5 h-5 transition-transform', showConfig ? 'rotate-180' : 'rotate-0')} />
+                      </button>
+                    </div>
+                  </div>
 
                   {showConfig && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -780,6 +1191,110 @@ export function TestingPage() {
               </div>
 
               <div className="space-y-5">
+                <div
+                  className={cn(
+                    'rounded-lg border border-border/60 bg-background/40 p-3',
+                    savedConfigs.length === 0 && !loadingConfigs ? 'opacity-60 pointer-events-none' : '',
+                  )}
+                >
+                  <div className="text-sm text-muted-foreground mb-2">Saved Configurations</div>
+                  <div className="relative flex flex-col sm:flex-row gap-2 sm:items-center">
+                    <select
+                      value={selectedConfigId}
+                      onChange={event => setSelectedConfigId(event.target.value)}
+                      disabled={loadingConfigs || savedConfigs.length === 0}
+                      className="flex-1 min-w-0 h-9 px-3 text-sm bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                    >
+                      {savedConfigs.length === 0 ? (
+                        <option value="">{loadingConfigs ? 'Loading saved configurations...' : 'No configurations saved yet'}</option>
+                      ) : (
+                        savedConfigs.map(config => (
+                          <option key={config.id} value={config.id}>
+                            {config.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={loadSelectedConfiguration}
+                      disabled={savedConfigs.length === 0}
+                      className={cn(
+                        'h-9 px-3 rounded-lg border transition-all inline-flex items-center gap-1.5 justify-center text-sm whitespace-nowrap',
+                        savedConfigs.length > 0
+                          ? 'border-border bg-background text-foreground hover:bg-white/10 dark:hover:bg-white/5'
+                          : 'border-border bg-background text-muted-foreground cursor-not-allowed',
+                      )}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      Apply
+                    </button>
+
+                    <div ref={configActionsRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowConfigActionsMenu(prev => !prev)}
+                        disabled={savedConfigs.length === 0}
+                        className={cn(
+                          'h-9 px-3 rounded-lg border transition-all inline-flex items-center gap-1.5 justify-center text-sm whitespace-nowrap',
+                          savedConfigs.length > 0
+                            ? 'border-border bg-background text-foreground hover:bg-white/10 dark:hover:bg-white/5'
+                            : 'border-border bg-background text-muted-foreground cursor-not-allowed',
+                        )}
+                      >
+                        Actions
+                        <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', showConfigActionsMenu ? 'rotate-180' : 'rotate-0')} />
+                      </button>
+
+                      {showConfigActionsMenu && savedConfigs.length > 0 && (
+                        <div className="absolute top-full right-0 mt-1 z-20 w-40 rounded-lg border border-border bg-popover shadow-lg overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowConfigActionsMenu(false);
+                              prepareUpdateConfiguration();
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 dark:hover:bg-white/5"
+                          >
+                            Update
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowConfigActionsMenu(false);
+                              prepareDuplicateConfiguration();
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 dark:hover:bg-white/5"
+                          >
+                            Duplicate
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowConfigActionsMenu(false);
+                              void deleteSelectedConfiguration();
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-2">
+                    <p className="text-xs text-muted-foreground">
+                      Select a configuration and click Apply, or use Actions for update/duplicate/delete.
+                    </p>
+                  </div>
+
+                  {savedConfigs.length === 0 && !loadingConfigs && (
+                    <p className="text-xs text-muted-foreground mt-2">No saved configurations yet. Use "Save as Configuration" below.</p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Test Name</label>
                   <input
@@ -992,6 +1507,19 @@ export function TestingPage() {
                     Cancel
                   </button>
                   <button
+                    onClick={openSaveConfigurationDialog}
+                    disabled={!canSaveConfiguration || isSavingConfig}
+                    className={cn(
+                      'px-4 py-2 rounded-lg font-medium transition-all inline-flex items-center gap-2',
+                      canSaveConfiguration && !isSavingConfig
+                        ? 'bg-background border border-border text-foreground hover:bg-white/10 dark:hover:bg-white/5'
+                        : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
+                    )}
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSavingConfig ? 'Saving...' : 'Save as Configuration'}
+                  </button>
+                  <button
                     onClick={() => void createTest()}
                     disabled={!canCreateTest || isCreating}
                     className={cn(
@@ -1004,6 +1532,312 @@ export function TestingPage() {
                     {isCreating ? 'Creating...' : 'Create Test'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showManageConfigModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[55] p-4">
+            <div className="glass-strong rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-white/60 dark:border-white/10 p-6">
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold">
+                    {saveConfigMode === 'update' ? 'Update Configuration' : 'Duplicate Configuration'}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Edit the configuration values here, then confirm with the button below.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowManageConfigModal(false);
+                    setShowCreateModal(true);
+                    restoreCreateFormSnapshot();
+                    setCreateFormSnapshot(null);
+                    setSaveConfigMode('create');
+                  }}
+                  className="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-white/10 dark:hover:bg-white/5"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Configuration Name</label>
+                  <input
+                    type="text"
+                    value={configNameDraft}
+                    onChange={event => setConfigNameDraft(event.target.value)}
+                    placeholder="e.g., External Anthropic Baseline"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Model Source</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setModelType('platform')}
+                      className={cn(
+                        'px-3 py-2 rounded-lg border text-left transition-all',
+                        modelType === 'platform'
+                          ? 'border-orange-500 bg-orange-500/10'
+                          : 'border-border bg-background hover:bg-white/10 dark:hover:bg-white/5',
+                      )}
+                    >
+                      <div className="font-medium">Platform model</div>
+                      <div className="text-xs text-muted-foreground">Use a model already available in the platform</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModelType('external')}
+                      className={cn(
+                        'px-3 py-2 rounded-lg border text-left transition-all',
+                        modelType === 'external'
+                          ? 'border-orange-500 bg-orange-500/10'
+                          : 'border-border bg-background hover:bg-white/10 dark:hover:bg-white/5',
+                      )}
+                    >
+                      <div className="font-medium">External model</div>
+                      <div className="text-xs text-muted-foreground">Call your own endpoint with custom payload</div>
+                    </button>
+                  </div>
+                </div>
+
+                {modelType === 'platform' ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Platform Model</label>
+                      <select
+                        value={modelId}
+                        onChange={event => setModelId(event.target.value)}
+                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                      >
+                        {models.map(model => (
+                          <option key={model.id} value={model.id}>
+                            {model.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Runner</label>
+                      <select
+                        value={runnerType}
+                        onChange={event => setRunnerType(event.target.value as RunnerType)}
+                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                      >
+                        <option value="prompt">Prompt</option>
+                        <option value="framework">Framework</option>
+                      </select>
+                    </div>
+
+                    {runnerType === 'prompt' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">System Prompt</label>
+                          <textarea
+                            value={systemPrompt}
+                            onChange={event => setSystemPrompt(event.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Mitigations</label>
+                          <div className="space-y-2 max-h-48 overflow-y-auto border border-border rounded-lg p-3 bg-background">
+                            {mitigations.map(mitigation => (
+                              <label key={mitigation.id} className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedMitigations.includes(mitigation.id)}
+                                  onChange={() => toggleMitigation(mitigation.id)}
+                                  className="w-4 h-4"
+                                />
+                                <span className="text-sm">{mitigation.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Endpoint</label>
+                        <input
+                          type="text"
+                          value={endpoint}
+                          onChange={event => setEndpoint(event.target.value)}
+                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Conversation Type</label>
+                        <select
+                          value={conversationMode}
+                          onChange={event => setConversationMode(event.target.value as ConversationMode)}
+                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                        >
+                          <option value="single">Single conversation</option>
+                          <option value="multi">Multi conversation</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Messages Field Name</label>
+                        <input
+                          type="text"
+                          value={messageFieldName}
+                          onChange={event => setMessageFieldName(event.target.value)}
+                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Headers</label>
+                      <textarea
+                        value={headersText}
+                        onChange={event => setHeadersText(event.target.value)}
+                        rows={4}
+                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground font-mono text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Payload Template (JSON object)</label>
+                      <textarea
+                        value={payloadText}
+                        onChange={event => setPayloadText(event.target.value)}
+                        rows={8}
+                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground font-mono text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {saveConfigError && (
+                  <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                    {saveConfigError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setShowManageConfigModal(false);
+                      setShowCreateModal(true);
+                      restoreCreateFormSnapshot();
+                      setCreateFormSnapshot(null);
+                      setSaveConfigMode('create');
+                    }}
+                    className="px-4 py-2 rounded-lg border border-border bg-background text-foreground hover:bg-white/10 dark:hover:bg-white/5 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void saveFromManageModal()}
+                    disabled={!canSaveConfiguration || isSavingConfig}
+                    className={cn(
+                      'px-4 py-2 rounded-lg font-medium transition-all inline-flex items-center gap-2',
+                      canSaveConfiguration && !isSavingConfig
+                        ? 'bg-background border border-border text-foreground hover:bg-white/10 dark:hover:bg-white/5'
+                        : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
+                    )}
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSavingConfig
+                      ? 'Saving...'
+                      : saveConfigMode === 'update'
+                        ? 'Update Configuration'
+                        : 'Duplicate Configuration'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showSaveConfigModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+            <div className="glass-strong rounded-xl w-full max-w-md border border-white/60 dark:border-white/10 p-5">
+              <h3 className="text-lg font-semibold">
+                {saveConfigMode === 'update'
+                  ? 'Update Configuration'
+                  : saveConfigMode === 'duplicate'
+                    ? 'Duplicate Configuration'
+                    : 'Save Configuration'}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {saveConfigMode === 'update'
+                  ? 'This updates the selected configuration using the current values in the create-test modal.'
+                  : saveConfigMode === 'duplicate'
+                    ? 'This creates a new configuration using the values currently prefilled in the create-test modal.'
+                    : 'Choose a name for this reusable configuration.'}
+              </p>
+
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1">Configuration Name</label>
+                <input
+                  type="text"
+                  value={configNameDraft}
+                  onChange={event => setConfigNameDraft(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' && !isSavingConfig) {
+                      void confirmSaveConfiguration();
+                    }
+                  }}
+                  placeholder="e.g., Anthropic External Baseline"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                  autoFocus
+                />
+              </div>
+
+              {saveConfigError && (
+                <div className="mt-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                  {saveConfigError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 mt-5">
+                <button
+                  onClick={() => {
+                    setShowSaveConfigModal(false);
+                    setSaveConfigError(null);
+                    setSaveConfigMode('create');
+                  }}
+                  disabled={isSavingConfig}
+                  className="px-4 py-2 rounded-lg border border-border bg-background text-foreground hover:bg-white/10 dark:hover:bg-white/5 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void confirmSaveConfiguration()}
+                  disabled={isSavingConfig}
+                  className={cn(
+                    'px-4 py-2 rounded-lg font-medium transition-all',
+                    !isSavingConfig
+                      ? 'bg-orange-600 text-white hover:bg-orange-700'
+                      : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
+                  )}
+                >
+                  {isSavingConfig
+                    ? 'Saving...'
+                    : saveConfigMode === 'update'
+                      ? 'Update Configuration'
+                      : saveConfigMode === 'duplicate'
+                        ? 'Duplicate Configuration'
+                        : 'Save Configuration'}
+                </button>
               </div>
             </div>
           </div>

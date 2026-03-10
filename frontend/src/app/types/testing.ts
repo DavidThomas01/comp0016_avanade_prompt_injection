@@ -38,6 +38,15 @@ export type Test = {
   created_at?: string;
 };
 
+export type SavedTestConfig = {
+  id: string;
+  name: string;
+  model: ModelSpec;
+  environment?: EnvironmentSpec | null;
+  runner: RunnerSpec;
+  created_at: string;
+};
+
 export type TestAnalysis = {
   flagged: boolean;
   score: number;
