@@ -45,6 +45,20 @@ const LOADING_INTERVAL_MS = 3200;
 const API_BASE = 'http://localhost:8080/api';
 
 type ConversationMode = 'single' | 'multi';
+type SetupMode = 'guided' | 'advanced';
+type ExternalPresetId = 'custom' | 'openai' | 'anthropic';
+
+type HeaderPair = {
+  id: string;
+  key: string;
+  value: string;
+};
+
+type ConnectionCheckResult = {
+  ok: boolean;
+  output?: string;
+  error?: string;
+};
 
 type CreateFormSnapshot = {
   newName: string;
@@ -56,9 +70,67 @@ type CreateFormSnapshot = {
   endpoint: string;
   conversationMode: ConversationMode;
   messageFieldName: string;
-  headersText: string;
+  responseTextPath: string;
+  setupMode: SetupMode;
+  selectedPreset: ExternalPresetId;
+  headerPairs: HeaderPair[];
   payloadText: string;
 };
+
+type ExternalPreset = {
+  id: ExternalPresetId;
+  label: string;
+  description: string;
+  endpoint: string;
+  conversationMode: ConversationMode;
+  messageField: string;
+  responseTextPath: string;
+  payloadTemplate: string;
+  headers: Record<string, string>;
+};
+
+const EXTERNAL_PRESETS: ExternalPreset[] = [
+  {
+    id: 'custom',
+    label: 'Custom API',
+    description: 'Bring your own endpoint and payload shape.',
+    endpoint: '',
+    conversationMode: 'single',
+    messageField: 'input',
+    responseTextPath: '',
+    payloadTemplate: '{\n  "input": ""\n}',
+    headers: { 'Content-Type': 'application/json' },
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI Compatible',
+    description: 'Works with OpenAI and compatible chat-completions APIs.',
+    endpoint: '',
+    conversationMode: 'multi',
+    messageField: 'messages',
+    responseTextPath: 'choices.0.message.content',
+    payloadTemplate: '{\n  "model": "<YOUR_MODEL>",\n  "temperature": 0.2,\n  "messages": []\n}',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer <YOUR_API_KEY>',
+    },
+  },
+  {
+    id: 'anthropic',
+    label: 'Anthropic Messages',
+    description: 'Anthropic message API format with content blocks.',
+    endpoint: '',
+    conversationMode: 'multi',
+    messageField: 'messages',
+    responseTextPath: 'content.0.text',
+    payloadTemplate: '{\n  "model": "<YOUR_MODEL>",\n  "max_tokens": 256,\n  "messages": [],\n "temperature": []\n}',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': '<YOUR_API_KEY>',
+      'anthropic-version': '2023-06-01',
+    },
+  },
+];
 
 const makeId = () => `msg_${Math.random().toString(36).slice(2, 10)}`;
 
@@ -114,26 +186,16 @@ async function apiDelete(path: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
-function parseHeaders(text: string): Record<string, string> {
+function parseHeaderPairs(pairs: HeaderPair[]): Record<string, string> {
   const parsed: Record<string, string> = {};
-  const lines = text
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean);
 
-  for (const line of lines) {
-    const separatorIndex = line.indexOf(':');
-    if (separatorIndex === -1) {
-      throw new Error(`Invalid header line: "${line}". Use "Header-Name: value" format.`);
-    }
-
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line.slice(separatorIndex + 1).trim();
-
+  for (const pair of pairs) {
+    const key = pair.key.trim();
+    const value = pair.value.trim();
+    if (!key && !value) continue;
     if (!key || !value) {
-      throw new Error(`Invalid header line: "${line}". Header name and value are required.`);
+      throw new Error(`Invalid header entry. Both name and value are required for "${key || '(empty)'}".`);
     }
-
     parsed[key] = value;
   }
 
@@ -196,14 +258,12 @@ function buildJsonSchemaFromPayload(payload: Record<string, unknown>): Record<st
   return inferJsonSchemaFromValue(payload);
 }
 
-function formatHeaders(headers: Record<string, string> | null | undefined): string {
+function headersToPairs(headers: Record<string, string> | null | undefined): HeaderPair[] {
   if (!headers || Object.keys(headers).length === 0) {
-    return 'Content-Type: application/json';
+    return [{ id: makeId(), key: 'Content-Type', value: 'application/json' }];
   }
 
-  return Object.entries(headers)
-    .map(([key, value]) => `${key}: ${value}`)
-    .join('\n');
+  return Object.entries(headers).map(([key, value]) => ({ id: makeId(), key, value }));
 }
 
 export function TestingPage() {
@@ -244,8 +304,13 @@ export function TestingPage() {
   const [endpoint, setEndpoint] = useState('');
   const [conversationMode, setConversationMode] = useState<ConversationMode>('single');
   const [messageFieldName, setMessageFieldName] = useState('input');
-  const [headersText, setHeadersText] = useState('Content-Type: application/json');
+  const [responseTextPath, setResponseTextPath] = useState('');
+  const [setupMode, setSetupMode] = useState<SetupMode>('guided');
+  const [selectedPreset, setSelectedPreset] = useState<ExternalPresetId>('custom');
+  const [headerPairs, setHeaderPairs] = useState<HeaderPair[]>(headersToPairs({ 'Content-Type': 'application/json' }));
   const [payloadText, setPayloadText] = useState('{\n  "input": ""\n}');
+  const [isValidatingConnection, setIsValidatingConnection] = useState(false);
+  const [connectionCheck, setConnectionCheck] = useState<ConnectionCheckResult | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const loadingMessage = useRotatingMessage(isRunning);
@@ -345,8 +410,12 @@ export function TestingPage() {
     setEndpoint('');
     setConversationMode('single');
     setMessageFieldName('input');
-    setHeadersText('Content-Type: application/json\nAuthorization: Bearer <YOUR_SECRET_KEY>');
+    setResponseTextPath('');
+    setSetupMode('guided');
+    setSelectedPreset('custom');
+    setHeaderPairs(headersToPairs({ 'Content-Type': 'application/json' }));
     setPayloadText('{\n  "input": ""\n}');
+    setConnectionCheck(null);
     setShowSaveConfigModal(false);
     setShowManageConfigModal(false);
     setShowConfigActionsMenu(false);
@@ -367,7 +436,10 @@ export function TestingPage() {
     endpoint,
     conversationMode,
     messageFieldName,
-    headersText,
+    responseTextPath,
+    setupMode,
+    selectedPreset,
+    headerPairs: headerPairs.map(item => ({ ...item })),
     payloadText,
   });
 
@@ -383,7 +455,10 @@ export function TestingPage() {
     setEndpoint(createFormSnapshot.endpoint);
     setConversationMode(createFormSnapshot.conversationMode);
     setMessageFieldName(createFormSnapshot.messageFieldName);
-    setHeadersText(createFormSnapshot.headersText);
+    setResponseTextPath(createFormSnapshot.responseTextPath);
+    setSetupMode(createFormSnapshot.setupMode);
+    setSelectedPreset(createFormSnapshot.selectedPreset);
+    setHeaderPairs(createFormSnapshot.headerPairs.map(item => ({ ...item })));
     setPayloadText(createFormSnapshot.payloadText);
   };
 
@@ -409,7 +484,10 @@ export function TestingPage() {
       setEndpoint('');
       setConversationMode('single');
       setMessageFieldName('input');
-      setHeadersText('Content-Type: application/json');
+      setResponseTextPath('');
+      setSelectedPreset('custom');
+      setSetupMode('guided');
+      setHeaderPairs(headersToPairs({ 'Content-Type': 'application/json' }));
       setPayloadText('{\n  "input": ""\n}');
       return;
     }
@@ -417,8 +495,18 @@ export function TestingPage() {
     setEndpoint(config.model.endpoint || '');
     setConversationMode((config.model.conversation_mode as ConversationMode) || 'single');
     setMessageFieldName(config.model.message_field || 'input');
-    setHeadersText(formatHeaders(config.model.headers));
+    setResponseTextPath(config.model.response_text_path || '');
+    setHeaderPairs(headersToPairs(config.model.headers));
     setPayloadText(config.model.payload ? JSON.stringify(config.model.payload, null, 2) : '{\n  "input": ""\n}');
+
+    const matchedPreset = EXTERNAL_PRESETS.find(
+      preset =>
+        preset.endpoint === (config.model.endpoint || '') &&
+        preset.messageField === (config.model.message_field || 'input') &&
+        preset.conversationMode === ((config.model.conversation_mode as ConversationMode) || 'single'),
+    );
+    setSelectedPreset(matchedPreset?.id || 'custom');
+    setSetupMode(matchedPreset ? 'guided' : 'advanced');
 
     setRunnerType('prompt');
     setSystemPrompt('');
@@ -449,6 +537,69 @@ export function TestingPage() {
     );
   };
 
+  const applyExternalPreset = (presetId: ExternalPresetId) => {
+    const preset = EXTERNAL_PRESETS.find(item => item.id === presetId);
+    if (!preset) return;
+
+    setSelectedPreset(presetId);
+    setEndpoint(preset.endpoint);
+    setConversationMode(preset.conversationMode);
+    setMessageFieldName(preset.messageField);
+    setResponseTextPath(preset.responseTextPath);
+    setPayloadText(preset.payloadTemplate);
+    setHeaderPairs(headersToPairs(preset.headers));
+    setConnectionCheck(null);
+  };
+
+  const addHeaderPair = () => {
+    setHeaderPairs(prev => [...prev, { id: makeId(), key: '', value: '' }]);
+  };
+
+  const updateHeaderPair = (id: string, field: 'key' | 'value', value: string) => {
+    setHeaderPairs(prev => prev.map(item => (item.id === id ? { ...item, [field]: value } : item)));
+  };
+
+  const removeHeaderPair = (id: string) => {
+    setHeaderPairs(prev => {
+      const next = prev.filter(item => item.id !== id);
+      return next.length > 0 ? next : [{ id: makeId(), key: '', value: '' }];
+    });
+  };
+
+  const insertPayloadToken = (token: string) => {
+    try {
+      const parsed = parsePayload(payloadText);
+      if (!Object.values(parsed).some(value => value === token)) {
+        parsed.prompt = token;
+      }
+      setPayloadText(JSON.stringify(parsed, null, 2));
+    } catch {
+      setCreateError('Payload must be valid JSON before inserting helper tokens.');
+    }
+  };
+
+  const validateExternalConnection = async () => {
+    if (modelType !== 'external') return;
+
+    setIsValidatingConnection(true);
+    setConnectionCheck(null);
+    setCreateError(null);
+
+    try {
+      const draft = buildConfigurationFromForm();
+      const response = await apiPost<{ output: string; raw: unknown }>('/tests/validate-external', {
+        model: draft.model,
+        prompt: 'Connection check',
+      });
+      setConnectionCheck({ ok: true, output: response.output || '(empty response text)' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setConnectionCheck({ ok: false, error: message });
+    } finally {
+      setIsValidatingConnection(false);
+    }
+  };
+
   const buildConfigurationFromForm = () => {
     const parsedPayload = modelType === 'external' ? parsePayload(payloadText) : null;
 
@@ -460,7 +611,8 @@ export function TestingPage() {
             endpoint: endpoint.trim(),
             conversation_mode: conversationMode,
             message_field: messageFieldName.trim(),
-            headers: parseHeaders(headersText),
+            response_text_path: responseTextPath.trim() || null,
+            headers: parseHeaderPairs(headerPairs),
             payload: parsedPayload,
             json_schema: parsedPayload ? buildJsonSchemaFromPayload(parsedPayload) : null,
           };
@@ -809,6 +961,212 @@ export function TestingPage() {
     }
   };
 
+  const renderExternalConfiguration = () => (
+    <>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-border bg-background/30 p-3">
+        <div>
+          <div className="text-sm font-medium">Setup Mode</div>
+          <div className="text-xs text-muted-foreground">Guided mode provides presets. Advanced mode allows manual tuning.</div>
+        </div>
+        <div className="inline-flex rounded-lg border border-border overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setSetupMode('guided')}
+            className={cn(
+              'px-3 py-1.5 text-sm',
+              setupMode === 'guided' ? 'bg-orange-500/20 text-foreground' : 'bg-background hover:bg-white/10 dark:hover:bg-white/5',
+            )}
+          >
+            Guided
+          </button>
+          <button
+            type="button"
+            onClick={() => setSetupMode('advanced')}
+            className={cn(
+              'px-3 py-1.5 text-sm border-l border-border',
+              setupMode === 'advanced' ? 'bg-orange-500/20 text-foreground' : 'bg-background hover:bg-white/10 dark:hover:bg-white/5',
+            )}
+          >
+            Advanced
+          </button>
+        </div>
+      </div>
+
+      {setupMode === 'guided' && (
+        <div>
+          <label className="block text-sm font-medium mb-2">Provider Preset</label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {EXTERNAL_PRESETS.map(preset => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyExternalPreset(preset.id)}
+                className={cn(
+                  'rounded-lg border p-3 text-left transition-all',
+                  selectedPreset === preset.id
+                    ? 'border-orange-500 bg-orange-500/10'
+                    : 'border-border bg-background hover:bg-white/10 dark:hover:bg-white/5',
+                )}
+              >
+                <div className="text-sm font-medium">{preset.label}</div>
+                <div className="text-xs text-muted-foreground mt-1">{preset.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Endpoint</label>
+          <input
+            type="text"
+            value={endpoint}
+            onChange={event => setEndpoint(event.target.value)}
+            placeholder="https://api.example.com/chat/completions"
+            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Conversation Type</label>
+          <select
+            value={conversationMode}
+            onChange={event => {
+              const mode = event.target.value as ConversationMode;
+              setConversationMode(mode);
+              if (mode === 'single' && !payloadText.includes('"input"')) {
+                setMessageFieldName('input');
+                setPayloadText('{\n  "input": ""\n}');
+              }
+              if (mode === 'multi' && !payloadText.includes('"messages"')) {
+                setMessageFieldName('messages');
+                setPayloadText('{\n  "messages": []\n}');
+              }
+            }}
+            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+          >
+            <option value="single">Single conversation</option>
+            <option value="multi">Multi conversation</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Message Field</label>
+          <input
+            type="text"
+            value={messageFieldName}
+            onChange={event => setMessageFieldName(event.target.value)}
+            placeholder="messages"
+            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Response Text Path (optional)</label>
+          <input
+            type="text"
+            value={responseTextPath}
+            onChange={event => setResponseTextPath(event.target.value)}
+            placeholder="choices.0.message.content"
+            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium">Headers</label>
+          <button
+            type="button"
+            onClick={addHeaderPair}
+            className="px-2 py-1 text-xs rounded-md border border-border bg-background hover:bg-white/10 dark:hover:bg-white/5"
+          >
+            Add Header
+          </button>
+        </div>
+        <div className="space-y-2">
+          {headerPairs.map(pair => (
+            <div key={pair.id} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+              <input
+                type="text"
+                value={pair.key}
+                onChange={event => updateHeaderPair(pair.id, 'key', event.target.value)}
+                placeholder="Header name"
+                className="px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+              />
+              <input
+                type="text"
+                value={pair.value}
+                onChange={event => updateHeaderPair(pair.id, 'value', event.target.value)}
+                placeholder="Header value"
+                className="px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+              />
+              <button
+                type="button"
+                onClick={() => removeHeaderPair(pair.id)}
+                className="px-2 py-2 rounded-md border border-border bg-background hover:bg-white/10 dark:hover:bg-white/5"
+                title="Remove header"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium">Payload Template (JSON object)</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => insertPayloadToken('{{prompt}}')}
+              className="px-2 py-1 text-xs rounded-md border border-border bg-background hover:bg-white/10 dark:hover:bg-white/5"
+            >
+              Insert prompt token
+            </button>
+          </div>
+        </div>
+        <textarea
+          value={payloadText}
+          onChange={event => setPayloadText(event.target.value)}
+          rows={8}
+          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground font-mono text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+        />
+      </div>
+
+      <div className="rounded-lg border border-border bg-background/30 p-3 space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="text-sm font-medium">Connection Check</div>
+          <button
+            type="button"
+            onClick={() => void validateExternalConnection()}
+            disabled={isValidatingConnection || endpoint.trim().length === 0}
+            className={cn(
+              'px-3 py-1.5 rounded-md text-sm border transition-all',
+              !isValidatingConnection && endpoint.trim().length > 0
+                ? 'border-border bg-background hover:bg-white/10 dark:hover:bg-white/5'
+                : 'border-border bg-background text-muted-foreground cursor-not-allowed',
+            )}
+          >
+            {isValidatingConnection ? 'Testing...' : 'Test Connection'}
+          </button>
+        </div>
+        {connectionCheck?.ok && (
+          <div className="text-xs text-green-700 dark:text-green-300 border border-green-300 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-md px-2 py-1">
+            Connected successfully. Extracted output: {connectionCheck.output}
+          </div>
+        )}
+        {connectionCheck && !connectionCheck.ok && (
+          <div className="text-xs text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 rounded-md px-2 py-1">
+            Connection failed: {connectionCheck.error}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-[calc(100vh-64px)] bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
@@ -954,6 +1312,10 @@ export function TestingPage() {
                           <div className="bg-background border border-border rounded-lg p-3">
                             <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Message Field</div>
                             <div className="font-medium break-words">{selectedTest.model.message_field || '-'}</div>
+                          </div>
+                          <div className="bg-background border border-border rounded-lg p-3">
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Response Text Path</div>
+                            <div className="font-medium break-words">{selectedTest.model.response_text_path || '(auto)'}</div>
                           </div>
                           <div className="bg-background border border-border rounded-lg p-3">
                             <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Headers</div>
@@ -1425,78 +1787,7 @@ export function TestingPage() {
                     )}
                   </>
                 ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Endpoint</label>
-                        <input
-                          type="text"
-                          value={endpoint}
-                          onChange={event => setEndpoint(event.target.value)}
-                          placeholder="https://api.example.com/chat/completions"
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Conversation Type</label>
-                        <select
-                          value={conversationMode}
-                          onChange={event => {
-                            const mode = event.target.value as ConversationMode;
-                            setConversationMode(mode);
-                            if (mode === 'single') {
-                              setMessageFieldName('input');
-                              setPayloadText('{\n  "input": ""\n}');
-                            } else {
-                              setMessageFieldName('messages');
-                              setPayloadText('{\n  "messages": []\n}');
-                            }
-                          }}
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                        >
-                          <option value="single">Single conversation</option>
-                          <option value="multi">Multi conversation</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Messages Field Name</label>
-                        <input
-                          type="text"
-                          value={messageFieldName}
-                          onChange={event => setMessageFieldName(event.target.value)}
-                          placeholder="messages"
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Headers</label>
-                      <textarea
-                        value={headersText}
-                        onChange={event => setHeadersText(event.target.value)}
-                        rows={4}
-                        placeholder={'Content-Type: application/json\nAuthorization: Bearer {{token}}'}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground font-mono text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Use one header per line with "Name: value" format.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Payload Template (JSON object)</label>
-                      <textarea
-                        value={payloadText}
-                        onChange={event => setPayloadText(event.target.value)}
-                        rows={8}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground font-mono text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                      />
-                    </div>
-
-                  </>
+                  renderExternalConfiguration()
                 )}
 
                 {createError && (
@@ -1675,61 +1966,7 @@ export function TestingPage() {
                     )}
                   </>
                 ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Endpoint</label>
-                        <input
-                          type="text"
-                          value={endpoint}
-                          onChange={event => setEndpoint(event.target.value)}
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Conversation Type</label>
-                        <select
-                          value={conversationMode}
-                          onChange={event => setConversationMode(event.target.value as ConversationMode)}
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                        >
-                          <option value="single">Single conversation</option>
-                          <option value="multi">Multi conversation</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Messages Field Name</label>
-                        <input
-                          type="text"
-                          value={messageFieldName}
-                          onChange={event => setMessageFieldName(event.target.value)}
-                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Headers</label>
-                      <textarea
-                        value={headersText}
-                        onChange={event => setHeadersText(event.target.value)}
-                        rows={4}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground font-mono text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Payload Template (JSON object)</label>
-                      <textarea
-                        value={payloadText}
-                        onChange={event => setPayloadText(event.target.value)}
-                        rows={8}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground font-mono text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
-                      />
-                    </div>
-                  </>
+                  renderExternalConfiguration()
                 )}
 
                 {saveConfigError && (
