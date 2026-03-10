@@ -67,7 +67,10 @@ class TestService():
         
     def _build_environment(self, environment_spec_input: EnvironmentSpecInput) -> EnvironmentSpec:
         if environment_spec_input.type == EnvType.MITIGATION:
-            self._build_prompt_environment(environment_spec_input.mitigations, environment_spec_input.system_prompt)
+            return self._build_prompt_environment(
+                environment_spec_input.mitigations,
+                environment_spec_input.system_prompt,
+            )
         if environment_spec_input.type == EnvType.CUSTOM:
             return EnvironmentSpec.create_from_system_prompt(environment_spec_input.system_prompt)
         raise InvalidModelConfiguration(f"invalid environment type: {environment_spec_input.type}")

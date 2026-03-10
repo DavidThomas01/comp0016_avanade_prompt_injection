@@ -57,8 +57,9 @@ class PromptRunner(TestRunner):
         )
         
         for mitigation_name in self._get_mitigations_for_layer(MitigationLayer.PRE_INPUT, mitigations):
-            mitigation = MITIGATION_REGISTRY.get(mitigation_name)
-            mitigation_context = mitigation.apply(mitigation_context)
+            mitigation_config = MITIGATION_REGISTRY.get(mitigation_name)
+            if mitigation_config and mitigation_config.implementation:
+                mitigation_context = mitigation_config.implementation.apply(mitigation_context)
             
         return mitigation_context.message
 
@@ -87,8 +88,9 @@ class PromptRunner(TestRunner):
         )
         
         for mitigation_name in self._get_mitigations_for_layer(MitigationLayer.POST_OUTPUT, mitigations):
-            mitigation = MITIGATION_REGISTRY.get(mitigation_name)
-            mitigation_context = mitigation.apply(mitigation_context)
+            mitigation_config = MITIGATION_REGISTRY.get(mitigation_name)
+            if mitigation_config and mitigation_config.implementation:
+                mitigation_context = mitigation_config.implementation.apply(mitigation_context)
             
         return mitigation_context.message
     
@@ -104,10 +106,11 @@ class PromptRunner(TestRunner):
         )
         
         for mitigation_name in self._get_mitigations_for_layer(MitigationLayer.MONITORING, mitigations):
-            mitigation = MITIGATION_REGISTRY.get(mitigation_name)
-            mitigation_context = mitigation.apply(mitigation_context)
-            mitigation_analysis.append(mitigation_context.analysis)
-            
+            mitigation_config = MITIGATION_REGISTRY.get(mitigation_name)
+            if mitigation_config and mitigation_config.implementation:
+                mitigation_context = mitigation_config.implementation.apply(mitigation_context)
+                mitigation_analysis.append(mitigation_context.analysis)
+
         return mitigation_analysis
             
             
