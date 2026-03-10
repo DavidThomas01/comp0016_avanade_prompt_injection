@@ -130,6 +130,7 @@ class PromptRunner(TestRunner):
             messages=(test.runner.context + [prompt]),
             conversation_mode=test.model.conversation_mode or "single",
             message_field=test.model.message_field or "input",
+            response_text_path=test.model.response_text_path,
             headers=test.model.headers,
             payload=test.model.payload,
             json_schema=test.model.json_schema,

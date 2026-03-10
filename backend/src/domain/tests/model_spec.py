@@ -20,6 +20,7 @@ class ModelSpec:
     endpoint: Optional[str] = None
     conversation_mode: Optional[str] = None
     message_field: Optional[str] = None
+    response_text_path: Optional[str] = None
     headers: Optional[dict[str, str]] = None
     payload: Optional[dict[str, Any]] = None
     json_schema: Optional[dict[str, Any]] = None
@@ -41,6 +42,7 @@ class ModelSpec:
         endpoint: Optional[str] = None,
         conversation_mode: str = "single",
         message_field: str = "input",
+        response_text_path: Optional[str] = None,
         headers: Optional[dict[str, str]] = None,
         payload: Optional[dict[str, Any]] = None,
         json_schema: Optional[dict[str, Any]] = None,
@@ -52,6 +54,7 @@ class ModelSpec:
             endpoint=endpoint,
             conversation_mode=conversation_mode,
             message_field=message_field,
+            response_text_path=response_text_path,
             headers=headers,
             payload=payload,
             json_schema=json_schema,
@@ -83,6 +86,8 @@ class ModelSpec:
                 raise InvalidModelConfiguration("external model requires conversation_mode: 'single' or 'multi'")
             if not self.message_field:
                 raise InvalidModelConfiguration("external model requires message_field")
+            if self.response_text_path is not None and not isinstance(self.response_text_path, str):
+                raise InvalidModelConfiguration("external model response_text_path must be a string")
             if self.headers is not None and not isinstance(self.headers, dict):
                 raise InvalidModelConfiguration("external model headers must be a JSON object")
             if self.payload is not None and not isinstance(self.payload, dict):

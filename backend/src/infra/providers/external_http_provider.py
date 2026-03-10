@@ -25,7 +25,7 @@ class ExternalHttpProvider(ExternalModelProvider):
             raise RuntimeError(f"External provider error {response.status_code}: {response.text}")
 
         data = response.json()
-        text = self._extract_response_text(data)
+        text = self._extract_response_text(data, request.response_text_path)
         return ModelResponse(text=text, raw=data)
 
     def _build_payload(self, request: ExternalModelRequest) -> dict[str, Any]:
@@ -113,7 +113,12 @@ class ExternalHttpProvider(ExternalModelProvider):
             raise InvalidModelConfiguration("external request requires at least one message")
         return request.messages[-1].content
 
-    def _extract_response_text(self, data: Any) -> str:
+    def _extract_response_text(self, data: Any, custom_path: str | None = None) -> str:
+        if custom_path:
+            extracted = self._extract_by_path(data, custom_path)
+            if isinstance(extracted, str):
+                return extracted
+
         if not isinstance(data, dict):
             return json.dumps(data)
 
@@ -147,3 +152,35 @@ class ExternalHttpProvider(ExternalModelProvider):
             return output_text
 
         return json.dumps(data)
+
+    def _extract_by_path(self, data: Any, path: str) -> Any:
+        tokens = self._tokenize_path(path)
+        current = data
+        for token in tokens:
+            if isinstance(token, int):
+                if not isinstance(current, list) or token < 0 or token >= len(current):
+                    return None
+                current = current[token]
+            else:
+                if not isinstance(current, dict) or token not in current:
+                    return None
+                current = current[token]
+        return current
+
+    def _tokenize_path(self, path: str) -> list[str | int]:
+        sanitized = path.strip()
+        if not sanitized:
+            return []
+
+        # Supports both dotted and bracket access: choices.0.message.content or choices[0].message.content
+        normalized = sanitized.replace("[", ".").replace("]", "")
+        tokens: list[str | int] = []
+        for part in normalized.split("."):
+            token = part.strip()
+            if not token:
+                continue
+            if token.isdigit():
+                tokens.append(int(token))
+            else:
+                tokens.append(token)
+        return tokens

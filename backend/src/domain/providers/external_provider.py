@@ -11,6 +11,7 @@ class ExternalModelRequest:
     messages: List[Message]
     conversation_mode: str
     message_field: str
+    response_text_path: Optional[str] = None
     headers: Optional[dict[str, str]] = None
     payload: Optional[dict[str, Any]] = None
     json_schema: Optional[dict[str, Any]] = None
