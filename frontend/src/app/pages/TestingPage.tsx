@@ -124,7 +124,7 @@ const EXTERNAL_PRESETS: ExternalPreset[] = [
     conversationMode: 'multi',
     messageField: 'messages',
     responseTextPath: 'content.0.text',
-    payloadTemplate: '{\n  "model": "<YOUR_MODEL>",\n  "max_tokens": 256,\n  "messages": [],\n "temperature": []\n}',
+    payloadTemplate: '{\n  "model": "<YOUR_MODEL>",\n  "max_tokens": 256,\n  "messages": [],\n "temperature": 0.7\n}',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': '<YOUR_API_KEY>',
@@ -544,6 +544,28 @@ export function TestingPage() {
     resetCreateForm();
     setSaveConfigMode('create');
     setShowCreateModal(true);
+  };
+
+  const switchModelType = (nextModelType: ModelType) => {
+    if (nextModelType === modelType) {
+      return;
+    }
+
+    setModelType(nextModelType);
+    setModelId(nextModelType === 'platform' ? (models.length > 0 ? models[0].id : '') : '');
+    setRunnerType('prompt');
+    setSystemPrompt('');
+    setSelectedMitigations([]);
+    setEndpoint('');
+    setConversationMode('single');
+    setMessageFieldName('input');
+    setResponseTextPath('');
+    setSetupMode('guided');
+    setSelectedPreset('custom');
+    setHeaderPairs(headersToPairs({ 'Content-Type': 'application/json' }));
+    setPayloadText('{\n  "input": ""\n}');
+    setConnectionCheck(null);
+    setCreateError(null);
   };
 
   const toggleMitigation = (id: string) => {
@@ -1719,7 +1741,7 @@ export function TestingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setModelType('platform')}
+                      onClick={() => switchModelType('platform')}
                       className={cn(
                         'px-3 py-2 rounded-lg border text-left transition-all',
                         modelType === 'platform'
@@ -1732,7 +1754,7 @@ export function TestingPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setModelType('external')}
+                      onClick={() => switchModelType('external')}
                       className={cn(
                         'px-3 py-2 rounded-lg border text-left transition-all',
                         modelType === 'external'
@@ -1917,7 +1939,7 @@ export function TestingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setModelType('platform')}
+                      onClick={() => switchModelType('platform')}
                       className={cn(
                         'px-3 py-2 rounded-lg border text-left transition-all',
                         modelType === 'platform'
@@ -1930,7 +1952,7 @@ export function TestingPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setModelType('external')}
+                      onClick={() => switchModelType('external')}
                       className={cn(
                         'px-3 py-2 rounded-lg border text-left transition-all',
                         modelType === 'external'
