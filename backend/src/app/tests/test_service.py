@@ -107,7 +107,7 @@ class TestService():
         except UnknownMitigation as e:
             raise InvalidModelConfiguration(f"invalid model configuration: {e}")
         
-        return EnvironmentSpec.create_from_mitigations(mitigations, system_prompt)
+        return EnvironmentSpec.create_from_mitigations(mitigations, compiled_prompt)
         
     
     def _build_runner(self, runner_spec_input: RunnerSpecInput) -> RunnerSpec:
