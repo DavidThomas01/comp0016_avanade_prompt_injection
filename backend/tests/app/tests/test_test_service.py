@@ -79,6 +79,27 @@ def test_create_success(ctx):
     assert response.runner.type == RunnerType.FRAMEWORK
     assert response.environment.type == EnvType.CUSTOM
     assert response.environment.system_prompt == "System Prompt."
+
+
+def test_create_framework_platform_without_environment_success(ctx):
+    request = CreateTestInput(
+        name="Framework Test",
+        model=ModelSpecInput(
+            type=ModelType.PLATFORM,
+            model_id="gpt-5.2"
+        ),
+        runner=RunnerSpecInput(
+            type=RunnerType.FRAMEWORK
+        ),
+        environment=None,
+    )
+
+    response = ctx.service.create(db=None, request=request)
+
+    assert response.name == "Framework Test"
+    assert response.model.type == ModelType.PLATFORM
+    assert response.runner.type == RunnerType.FRAMEWORK
+    assert response.environment is None
     
 
 def test_create_invalid_test_failure(ctx):
@@ -100,7 +121,7 @@ def test_create_invalid_test_failure(ctx):
     with pytest.raises(InvalidModelConfiguration) as exc:
         ctx.service.create(db=None, request=request)
         
-    assert str(exc.value) == "external model cannot include environment"
+    assert str(exc.value) == "framework runner requires platform model"
     
 
 def test_create_incomplete_test_failure(ctx):
@@ -126,7 +147,7 @@ def test_update_test_success(ctx):
             endpoint="Endpoint"
         ),
         runner=RunnerSpecInput(
-            type=RunnerType.FRAMEWORK
+            type=RunnerType.PROMPT
         )
     )
     
@@ -137,7 +158,7 @@ def test_update_test_success(ctx):
     assert response.model.type == ModelType.EXTERNAL
     assert response.model.endpoint == "Endpoint"
     assert response.model.headers is None
-    assert response.runner.type == RunnerType.FRAMEWORK
+    assert response.runner.type == RunnerType.PROMPT
     assert response.environment == None
     
             
@@ -150,7 +171,7 @@ def test_update_test_name_success(ctx):
     
     assert response.id == "test_123"
     assert response.name == "New Test Name"
-    assert response.name is not "Test"
+    assert response.name != "Test"
     assert response.model.type == ModelType.PLATFORM
     assert response.environment.type == EnvType.CUSTOM
     
@@ -210,6 +231,24 @@ async def test_run_test_success(ctx):
     
     assert result.output == "Hello"
     assert result.analysis == "Pass"
+
+
+@pytest.mark.asyncio
+async def test_run_framework_test_skips_context_updates(ctx):
+    framework_test = Test(
+        id="framework_test",
+        name="Framework Test",
+        model=ModelSpec(type=ModelType.PLATFORM, model_id="gpt-5.2"),
+        environment=EnvironmentSpec(type=EnvType.CUSTOM, system_prompt="Prompt."),
+        runner=RunnerSpec(type=RunnerType.FRAMEWORK),
+        created_at=None,
+    )
+    ctx.repo.get_by_id.side_effect = lambda db, id: framework_test if id == "framework_test" else generate_test(id) if id != "missing" else None
+
+    result = await ctx.service.run(db=None, id="framework_test", message=Message(role="user", content="message"))
+
+    assert result.output == "Hello"
+    ctx.repo.update.assert_not_called()
 
     
 def test_run_missing_test_failure(ctx):
