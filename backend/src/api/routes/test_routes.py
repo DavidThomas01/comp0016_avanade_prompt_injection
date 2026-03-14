@@ -1,9 +1,12 @@
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-
 from infra.persistance.db import SessionLocal
+from infra.tests.runners.garak_runner import GarakRunner
 
 from app.tests import TestService
 
@@ -80,6 +83,24 @@ async def run_test(test_id: str, request: RunTestRequest, db: Session = Depends(
         raise HTTPException(status_code=404, detail=str(e))
     except InvalidModelConfiguration as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/{test_id}/runs")
+def list_test_runs(test_id: str):
+    """Return all saved garak run results for a given test, newest first."""
+    base = GarakRunner.BASE_OUTPUT.resolve()
+    runs = []
+    for run_dir in sorted(base.glob(f"{test_id}_*"), key=lambda p: p.stat().st_mtime, reverse=True):
+        result_file = run_dir / "result.json"
+        if result_file.exists():
+            try:
+                data = json.loads(result_file.read_text(encoding="utf-8"))
+                runs.append(data)
+            except Exception:
+                pass
+    return runs
 
 
 @router.post("/validate-external", response_model=ValidateExternalModelResponse)

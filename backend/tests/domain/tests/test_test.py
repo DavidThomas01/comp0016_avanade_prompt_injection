@@ -67,6 +67,35 @@ class TestTestEntity:
                 runner=runner
             )
 
+    def test_create_framework_test_with_platform_model_without_environment(self):
+        """Framework tests can be created for platform models without environment"""
+        model = ModelSpec.create_platform(model_id="gpt-5.2")
+        runner = RunnerSpec.create_framework()
+
+        test = Test.create(
+            name="Framework Test",
+            model=model,
+            environment=None,
+            runner=runner,
+        )
+
+        assert test.model == model
+        assert test.environment is None
+        assert test.runner == runner
+
+    def test_create_framework_test_with_external_model_raises(self):
+        """Framework tests cannot be created for external models"""
+        model = ModelSpec.create_external(endpoint="https://api.example.com")
+        runner = RunnerSpec.create_framework()
+
+        with pytest.raises(InvalidModelConfiguration, match="framework runner requires platform model"):
+            Test.create(
+                name="Invalid Framework Test",
+                model=model,
+                environment=None,
+                runner=runner,
+            )
+
     def test_create_test_external_model_with_environment_raises(self):
         """Creating test with external model and environment raises error"""
         model = ModelSpec.create_external(

@@ -1,4 +1,4 @@
-from infra.tests.runners import resolve_runner
+from infra.tests.runners.registry import resolve_runner
 from domain.tests import *
 from domain.providers import Message
 from typing import Optional

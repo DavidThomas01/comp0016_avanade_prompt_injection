@@ -39,6 +39,8 @@ class FakeTestService:
     async def run(self, db, test_id, message):
         if test_id == "missing":
             raise NotFoundError("Not found")
+        if test_id == "garak-error":
+            raise RuntimeError("garak failed")
 
         return {
             "output": "Hello",
@@ -143,3 +145,12 @@ def test_run_test_not_found():
     )
 
     assert response.status_code == 404
+
+
+def test_run_test_runtime_failure():
+    response = client.post(
+        "/api/tests/garak-error/run",
+        json={"role": "user", "content": "Hi"}
+    )
+
+    assert response.status_code == 502

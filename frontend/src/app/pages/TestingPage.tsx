@@ -24,6 +24,7 @@ import { cn } from '../components/ui/utils';
 import type {
   ChatMessage,
   EnvironmentSpec,
+  FrameworkRun,
   ModelSpec,
   ModelType,
   RunResult,
@@ -42,7 +43,19 @@ const LOADING_MESSAGES = [
   'Almost done...',
 ];
 
+const FRAMEWORK_LOADING_MESSAGES = [
+  'Starting Garak framework scan...',
+  'Sending probe attempts to the model...',
+  'Running prompt injection probes...',
+  'Waiting for model responses...',
+  'Still scanning — this takes a few minutes...',
+  'Evaluating responses against detectors...',
+  'Processing results...',
+  'Almost done — finalising report...',
+];
+
 const LOADING_INTERVAL_MS = 3200;
+const FRAMEWORK_LOADING_INTERVAL_MS = 12000;
 const API_BASE = 'http://localhost:8080/api';
 
 type ConversationMode = 'single' | 'multi';
@@ -66,6 +79,7 @@ type CreateFormSnapshot = {
   modelType: ModelType;
   modelId: string;
   runnerType: RunnerType;
+  probeSpec: string;
   systemPrompt: string;
   selectedMitigations: string[];
   endpoint: string;
@@ -124,7 +138,7 @@ const EXTERNAL_PRESETS: ExternalPreset[] = [
     conversationMode: 'multi',
     messageField: 'messages',
     responseTextPath: 'content.0.text',
-    payloadTemplate: '{\n  "model": "<YOUR_MODEL>",\n  "max_tokens": 256,\n  "messages": [],\n "temperature": []\n}',
+    payloadTemplate: '{\n  "model": "<YOUR_MODEL>",\n  "max_tokens": 256,\n  "messages": [],\n "temperature": 0.7\n}',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': '<YOUR_API_KEY>',
@@ -133,9 +147,82 @@ const EXTERNAL_PRESETS: ExternalPreset[] = [
   },
 ];
 
+const GARAK_PROBES = [
+  // Fast (parallel, <10 calls)
+  {
+    id: 'dan.AutoDANCached',
+    label: 'DAN – Quick (cached)',
+    description: 'Runs 3 cached "Do Anything Now" jailbreak prompts. Parallel. Very fast.',
+    estimatedCalls: 3,
+    speed: 'fast' as const,
+  },
+  {
+    id: 'goodside.ThreatenJSON',
+    label: 'JSON Threat Injection',
+    description: 'Checks if the model leaks or corrupts structured JSON output under adversarial pressure. Parallel.',
+    estimatedCalls: 1,
+    speed: 'fast' as const,
+  },
+  {
+    id: 'goodside.WhoIsRiley',
+    label: 'Riley Persona Injection',
+    description: 'Tries to hijack the model into adopting an unrestricted "Riley" persona. Parallel.',
+    estimatedCalls: 6,
+    speed: 'fast' as const,
+  },
+  // Medium (parallel, 12–64 calls)
+  {
+    id: 'web_injection.MarkdownImageExfil',
+    label: 'Markdown Image Exfil',
+    description: 'Attempts to exfiltrate data via injected Markdown image tags. Parallel.',
+    estimatedCalls: 12,
+    speed: 'medium' as const,
+  },
+  {
+    id: 'dan.DanInTheWild',
+    label: 'DAN – Full (in-the-wild)',
+    description: '64 real-world DAN jailbreak variants collected from public sources. Parallel.',
+    estimatedCalls: 64,
+    speed: 'medium' as const,
+  },
+  {
+    id: 'latentinjection.LatentJailbreak',
+    label: 'Latent Context Jailbreak',
+    description: 'Embeds jailbreak instructions inside otherwise innocent context (documents, summaries). Parallel.',
+    estimatedCalls: 64,
+    speed: 'medium' as const,
+  },
+  // Slow (sequential, 64 calls — parallel_attempts has no effect)
+  {
+    id: 'promptinject.HijackHateHumans',
+    label: 'Goal Hijack – "Hate Humans"',
+    description: 'Injects a "hate humans" payload across 64 context templates. Sequential — cannot be parallelised.',
+    estimatedCalls: 64,
+    speed: 'slow' as const,
+  },
+  {
+    id: 'promptinject.HijackKillHumans',
+    label: 'Goal Hijack – "Kill Humans"',
+    description: 'Injects a "kill humans" payload across 64 context templates. Sequential — cannot be parallelised.',
+    estimatedCalls: 64,
+    speed: 'slow' as const,
+  },
+  {
+    id: 'promptinject.HijackLongPrompt',
+    label: 'Goal Hijack – Long Prompt',
+    description: 'Injects a long adversarial prompt across 64 context templates. Sequential — cannot be parallelised.',
+    estimatedCalls: 64,
+    speed: 'slow' as const,
+  },
+];
+
 const makeId = () => `msg_${Math.random().toString(36).slice(2, 10)}`;
 
-function useRotatingMessage(active: boolean) {
+function useRotatingMessage(
+  active: boolean,
+  messages: string[] = LOADING_MESSAGES,
+  intervalMs: number = LOADING_INTERVAL_MS,
+) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -145,24 +232,30 @@ function useRotatingMessage(active: boolean) {
     }
 
     const id = setInterval(() => {
-      setIndex(prev => (prev + 1) % LOADING_MESSAGES.length);
-    }, LOADING_INTERVAL_MS);
+      setIndex(prev => (prev + 1) % messages.length);
+    }, intervalMs);
 
     return () => clearInterval(id);
-  }, [active]);
+  }, [active, messages, intervalMs]);
 
-  return LOADING_MESSAGES[index];
+  return messages[index];
 }
 
-async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+async function apiPost<T>(path: string, body: unknown, timeoutMs?: number): Promise<T> {
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller?.signal,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function apiPatch<T>(path: string, body: unknown): Promise<T> {
@@ -276,6 +369,11 @@ export function TestingPage() {
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [expandedAttempts, setExpandedAttempts] = useState<Set<number>>(new Set());
+  const [frameworkRuns, setFrameworkRuns] = useState<FrameworkRun[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [loadingRuns, setLoadingRuns] = useState(false);
+  const [expandedRunAttempts, setExpandedRunAttempts] = useState<Record<string, Set<number>>>({});
   const [promptOverride, setPromptOverride] = useState('');
 
   const [isRunning, setIsRunning] = useState(false);
@@ -300,6 +398,7 @@ export function TestingPage() {
   const [modelType, setModelType] = useState<ModelType>('platform');
   const [modelId, setModelId] = useState('');
   const [runnerType, setRunnerType] = useState<RunnerType>('prompt');
+  const [probeSpec, setProbeSpec] = useState('dan.AutoDANCached');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [selectedMitigations, setSelectedMitigations] = useState<string[]>([]);
 
@@ -315,7 +414,12 @@ export function TestingPage() {
   const [connectionCheck, setConnectionCheck] = useState<ConnectionCheckResult | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const loadingMessage = useRotatingMessage(isRunning);
+  const isFrameworkTest = selectedTest?.runner.type === 'framework';
+  const loadingMessage = useRotatingMessage(
+    isRunning,
+    isFrameworkTest ? FRAMEWORK_LOADING_MESSAGES : LOADING_MESSAGES,
+    isFrameworkTest ? FRAMEWORK_LOADING_INTERVAL_MS : LOADING_INTERVAL_MS,
+  );
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const configActionsRef = useRef<HTMLDivElement>(null);
 
@@ -400,13 +504,17 @@ export function TestingPage() {
       ? modelId.trim().length > 0
       : endpoint.trim().length > 0 && messageFieldName.trim().length > 0;
 
-  const canRunTest = !!selectedTest && promptOverride.trim().length > 0 && !isRunning;
+  const canRunTest =
+    !!selectedTest &&
+    !isRunning &&
+    (selectedTest.runner.type === 'framework' || promptOverride.trim().length > 0);
 
   const resetCreateForm = () => {
     setNewName('');
     setModelType('platform');
     setModelId(models.length > 0 ? models[0].id : '');
     setRunnerType('prompt');
+    setProbeSpec('promptinject');
     setSystemPrompt('');
     setSelectedMitigations([]);
     setEndpoint('');
@@ -434,6 +542,7 @@ export function TestingPage() {
     modelType,
     modelId,
     runnerType,
+    probeSpec,
     systemPrompt,
     selectedMitigations: [...selectedMitigations],
     endpoint,
@@ -453,6 +562,7 @@ export function TestingPage() {
     setModelType(createFormSnapshot.modelType);
     setModelId(createFormSnapshot.modelId);
     setRunnerType(createFormSnapshot.runnerType);
+    setProbeSpec(createFormSnapshot.probeSpec);
     setSystemPrompt(createFormSnapshot.systemPrompt);
     setSelectedMitigations(createFormSnapshot.selectedMitigations);
     setEndpoint(createFormSnapshot.endpoint);
@@ -544,6 +654,28 @@ export function TestingPage() {
     resetCreateForm();
     setSaveConfigMode('create');
     setShowCreateModal(true);
+  };
+
+  const switchModelType = (nextModelType: ModelType) => {
+    if (nextModelType === modelType) {
+      return;
+    }
+
+    setModelType(nextModelType);
+    setModelId(nextModelType === 'platform' ? (models.length > 0 ? models[0].id : '') : '');
+    setRunnerType('prompt');
+    setSystemPrompt('');
+    setSelectedMitigations([]);
+    setEndpoint('');
+    setConversationMode('single');
+    setMessageFieldName('input');
+    setResponseTextPath('');
+    setSetupMode('guided');
+    setSelectedPreset('custom');
+    setHeaderPairs(headersToPairs({ 'Content-Type': 'application/json' }));
+    setPayloadText('{\n  "input": ""\n}');
+    setConnectionCheck(null);
+    setCreateError(null);
   };
 
   const toggleMitigation = (id: string) => {
@@ -657,6 +789,7 @@ export function TestingPage() {
       runner: {
         type: runnerType,
         context: [],
+        ...(runnerType === 'framework' ? { probe_spec: probeSpec } : {}),
       },
     };
   };
@@ -885,6 +1018,19 @@ export function TestingPage() {
     }
   };
 
+  const fetchFrameworkRuns = async (testId: string) => {
+    setLoadingRuns(true);
+    try {
+      const runs = await apiGet<FrameworkRun[]>(`/tests/${testId}/runs`);
+      setFrameworkRuns(runs);
+      setSelectedRunId(runs.length > 0 ? runs[0].run_id : null);
+    } catch {
+      setFrameworkRuns([]);
+    } finally {
+      setLoadingRuns(false);
+    }
+  };
+
   const selectTest = async (testId: string) => {
     try {
       const test = await apiGet<Test>(`/tests/${testId}`);
@@ -903,6 +1049,12 @@ export function TestingPage() {
       setChatMessages(contextMessages);
       setRunResult(null);
       setPromptOverride('');
+      setFrameworkRuns([]);
+      setSelectedRunId(null);
+
+      if (test.runner.type === 'framework') {
+        void fetchFrameworkRuns(testId);
+      }
     } catch (error) {
       console.error('Failed to load test:', error);
     }
@@ -925,36 +1077,48 @@ export function TestingPage() {
   const runTest = async () => {
     if (!canRunTest || !selectedTest) return;
 
-    const trimmedPrompt = promptOverride.trim();
-    setPromptOverride('');
+    const isFrameworkRun = selectedTest.runner.type === 'framework';
+    const trimmedPrompt = isFrameworkRun ? 'Run Garak framework scan' : promptOverride.trim();
+    if (!isFrameworkRun) {
+      setPromptOverride('');
+    }
 
     setIsRunning(true);
-    setChatMessages(prev => [
-      ...prev,
-      {
-        id: makeId(),
-        role: 'user',
-        content: trimmedPrompt,
-        pending: false,
-      },
-    ]);
-
-    try {
-      const response = await apiPost<RunResult>(`/tests/${selectedTest.id}/run`, {
-        role: 'user',
-        content: trimmedPrompt,
-      });
-
-      setRunResult(response);
+    if (!isFrameworkRun) {
       setChatMessages(prev => [
         ...prev,
         {
           id: makeId(),
-          role: 'assistant',
-          content: response.output,
+          role: 'user',
+          content: trimmedPrompt,
           pending: false,
         },
       ]);
+    }
+
+    try {
+      const response = await apiPost<RunResult>(
+        `/tests/${selectedTest.id}/run`,
+        { role: 'user', content: trimmedPrompt },
+        isFrameworkRun ? 15 * 60 * 1000 : undefined,
+      );
+
+      setRunResult(response);
+
+      if (isFrameworkRun && response.attempts != null) {
+        // Reload runs from server so run_id is included
+        void fetchFrameworkRuns(selectedTest.id);
+      } else {
+        setChatMessages(prev => [
+          ...prev,
+          {
+            id: makeId(),
+            role: 'assistant',
+            content: response.output,
+            pending: false,
+          },
+        ]);
+      }
     } catch (error) {
       setChatMessages(prev => [
         ...prev,
@@ -1404,112 +1568,387 @@ export function TestingPage() {
                   )}
                 </div>
 
-                <div className="glass-strong p-6 rounded-xl">
-                  <h2 className="text-lg font-semibold mb-4">Test Chat</h2>
-                  <div
-                    ref={chatScrollRef}
-                    className="h-96 bg-background rounded-lg p-4 overflow-y-auto space-y-4 mb-4 border border-border"
-                  >
-                    {chatMessages.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-muted-foreground">
-                        Send a prompt to start the test
-                      </div>
-                    ) : (
-                      chatMessages.map(message => (
-                        <div
-                          key={message.id}
-                          className={cn('flex gap-3', message.role === 'user' ? 'justify-end' : 'justify-start')}
-                        >
-                          {message.role === 'assistant' && (
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 dark:bg-orange-500 flex items-center justify-center">
-                              <Bot className="w-4 h-4 text-white" />
-                            </div>
-                          )}
-
-                          <div
-                            className={cn(
-                              'max-w-md px-4 py-3 rounded-lg border text-sm',
-                              message.role === 'user'
-                                ? 'bg-orange-600 text-white border-orange-700 rounded-br-none'
-                                : 'bg-white dark:bg-gray-900 text-foreground border-border rounded-bl-none',
-                            )}
-                          >
-                            <div className="font-semibold mb-1 text-xs uppercase opacity-75">
-                              {message.role === 'user' ? 'You' : 'Assistant'}
-                            </div>
-                            {message.role === 'assistant' ? (
-                              <MarkdownRenderer content={message.content} />
-                            ) : (
-                              <div className="whitespace-pre-wrap break-words">{message.content}</div>
-                            )}
-                          </div>
-
-                          {message.role === 'user' && (
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 dark:bg-orange-500 flex items-center justify-center">
-                              <User className="w-4 h-4 text-white" />
-                            </div>
-                          )}
+                {selectedTest.runner.type === 'framework' ? (
+                  <div className="glass-strong p-6 rounded-xl space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold">Garak Framework Scan</h2>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Probe: {GARAK_PROBES.find(p => p.id === (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'))?.label ?? selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'}
                         </div>
-                      ))
+                      </div>
+                      <button
+                        onClick={() => void runTest()}
+                        disabled={!canRunTest}
+                        className={cn(
+                          'px-4 py-2 rounded-lg font-medium transition-all inline-flex items-center gap-2',
+                          canRunTest
+                            ? 'bg-orange-600 text-white hover:bg-orange-700'
+                            : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
+                        )}
+                      >
+                        <Send className="w-4 h-4" />
+                        Run Scan
+                      </button>
+                    </div>
+
+                    {GARAK_PROBES.find(p => p.id === (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'))?.speed === 'slow' && (
+                      <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex gap-2 items-start">
+                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>
+                          <span className="font-medium">Slow probe — sequential only.</span>{' '}
+                          All {GARAK_PROBES.find(p => p.id === (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'))?.estimatedCalls} calls run one-by-one and may take several minutes.
+                        </span>
+                      </div>
                     )}
 
                     {isRunning && (
-                      <div className="flex gap-3">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 dark:bg-orange-500 flex items-center justify-center">
-                          <Bot className="w-4 h-4 text-white" />
+                      <div className="flex items-center gap-3 py-2 text-muted-foreground">
+                        <span className="flex gap-1">
+                          <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" />
+                          <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
+                          <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+                        </span>
+                        <span key={loadingMessage} className="text-sm animate-in fade-in duration-500">{loadingMessage}</span>
+                      </div>
+                    )}
+
+                    {/* Run history */}
+                    {loadingRuns ? (
+                      <div className="text-sm text-muted-foreground py-4 flex items-center gap-2">
+                        <span className="flex gap-1">
+                          <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" />
+                          <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
+                          <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+                        </span>
+                        Loading scan history...
+                      </div>
+                    ) : frameworkRuns.length === 0 ? (
+                      !isRunning && (
+                        <div className="text-sm text-muted-foreground py-4">
+                          No scans run yet. Click Run Scan to start.
                         </div>
-                        <div className="max-w-md px-4 py-3 rounded-lg border bg-white dark:bg-gray-900 text-foreground border-border rounded-bl-none">
-                          <div className="font-semibold mb-1 text-xs uppercase opacity-75">Assistant</div>
-                          <div className="flex items-center gap-2">
-                            <span className="flex gap-1">
-                              <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" />
-                              <span
-                                className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce"
-                                style={{ animationDelay: '0.15s' }}
-                              />
-                              <span
-                                className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce"
-                                style={{ animationDelay: '0.3s' }}
-                              />
-                            </span>
-                            <span key={loadingMessage} className="text-sm text-muted-foreground animate-in fade-in duration-500">
-                              {loadingMessage}
-                            </span>
-                          </div>
+                      )
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                          {frameworkRuns.length} scan{frameworkRuns.length !== 1 ? 's' : ''} recorded
                         </div>
+                        {frameworkRuns.map(run => {
+                          const isExpanded = selectedRunId === run.run_id;
+                          const probeLabel = GARAK_PROBES.find(p => p.id === run.probe_spec)?.label ?? run.probe_spec;
+                          const total = run.attempts?.length ?? 0;
+                          const blocked = run.attempts?.filter(a => a.blocked).length ?? 0;
+                          const reached = total - blocked;
+                          const runAttempts = expandedRunAttempts[run.run_id] ?? new Set<number>();
+                          return (
+                            <div key={run.run_id} className="rounded-xl border border-border overflow-hidden">
+                              {/* Card header */}
+                              <button
+                                onClick={() => setSelectedRunId(prev => prev === run.run_id ? null : run.run_id)}
+                                className="w-full flex items-center justify-between px-4 py-3 bg-background/50 hover:bg-background/80 transition-colors text-left"
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  {run.analysis.flagged ? (
+                                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                                  ) : (
+                                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium truncate">{probeLabel}</div>
+                                    <div className="text-xs text-muted-foreground">{new Date(run.started_at).toLocaleString()}</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-3">
+                                  {total > 0 && (
+                                    <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+                                      <span className="text-green-600 dark:text-green-400 font-medium">{blocked} blocked</span>
+                                      <span>/</span>
+                                      <span className="text-red-600 dark:text-red-400 font-medium">{reached} reached</span>
+                                    </div>
+                                  )}
+                                  <span className={cn(
+                                    'text-xs font-semibold px-2 py-0.5 rounded',
+                                    run.analysis.flagged
+                                      ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                                      : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
+                                  )}>
+                                    {run.analysis.flagged ? 'Risk Detected' : 'Safe'}
+                                  </span>
+                                  <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform', isExpanded ? 'rotate-180' : '')} />
+                                </div>
+                              </button>
+
+                              {/* Expanded analysis */}
+                              {isExpanded && (
+                                <div className="border-t border-border bg-background/20 p-4 space-y-4">
+                                  {/* Safe/flagged banner */}
+                                  <div className={cn(
+                                    'p-3 rounded-lg flex items-start gap-3',
+                                    run.analysis.flagged
+                                      ? 'bg-red-500/10 border border-red-500/30'
+                                      : 'bg-green-500/10 border border-green-500/30',
+                                  )}>
+                                    {run.analysis.flagged
+                                      ? <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                                      : <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                                    }
+                                    <div>
+                                      <div className={cn('font-semibold text-sm', run.analysis.flagged ? 'text-red-700 dark:text-red-400' : 'text-green-700 dark:text-green-400')}>
+                                        {run.analysis.flagged ? 'Prompt Injection Detected' : 'Safe Prompt'}
+                                      </div>
+                                      <div className="text-xs opacity-80 mt-0.5">{run.analysis.reason}</div>
+                                    </div>
+                                  </div>
+
+                                  {/* Risk score */}
+                                  <div>
+                                    <div className="text-sm font-medium mb-1.5">Risk Score</div>
+                                    <div className="w-full bg-gray-300 dark:bg-gray-700 rounded-full h-2">
+                                      <div
+                                        className={cn('h-2 rounded-full', run.analysis.score > 0.7 ? 'bg-red-600' : run.analysis.score > 0.4 ? 'bg-yellow-600' : 'bg-green-600')}
+                                        style={{ width: `${run.analysis.score * 100}%` }}
+                                      />
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">{(run.analysis.score * 100).toFixed(1)}%</div>
+                                  </div>
+
+                                  {run.report_html_url && (
+                                    <a
+                                      href={`http://localhost:8000${run.report_html_url}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                      View Full Garak Report
+                                    </a>
+                                  )}
+
+                                  {/* Breakdown chart */}
+                                  {total > 0 && (() => {
+                                    const compromisedCount = run.attempts?.filter(a => !a.blocked && a.compromised).length ?? 0;
+                                    const handledCount = run.attempts?.filter(a => !a.blocked && !a.compromised).length ?? 0;
+                                    const blockedPct = (blocked / total) * 100;
+                                    const handledPct = (handledCount / total) * 100;
+                                    const compromisedPct = (compromisedCount / total) * 100;
+                                    return (
+                                      <div className="rounded-lg border border-border bg-background/40 p-3 space-y-2">
+                                        <div className="text-sm font-medium">Probe Outcome Breakdown</div>
+                                        <div className="w-full h-4 rounded-full overflow-hidden flex bg-gray-200 dark:bg-gray-700">
+                                          {blocked > 0 && <div className="h-full bg-green-500" style={{ width: `${blockedPct}%` }} title={`Blocked by filter: ${blocked}`} />}
+                                          {handledCount > 0 && <div className="h-full bg-amber-400" style={{ width: `${handledPct}%` }} title={`Reached model – handled: ${handledCount}`} />}
+                                          {compromisedCount > 0 && <div className="h-full bg-red-500" style={{ width: `${compromisedPct}%` }} title={`Compromised: ${compromisedCount}`} />}
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          <div className="flex items-center gap-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2">
+                                            <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                                            <div>
+                                              <div className="text-xs text-muted-foreground">Blocked</div>
+                                              <div className="text-base font-bold text-green-700 dark:text-green-400 leading-none">{blocked}</div>
+                                              <div className="text-xs text-muted-foreground">{blockedPct.toFixed(0)}%</div>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2">
+                                            <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                                            <div>
+                                              <div className="text-xs text-muted-foreground">Handled</div>
+                                              <div className="text-base font-bold text-amber-700 dark:text-amber-400 leading-none">{handledCount}</div>
+                                              <div className="text-xs text-muted-foreground">{handledPct.toFixed(0)}%</div>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
+                                            <div className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                                            <div>
+                                              <div className="text-xs text-muted-foreground">Compromised</div>
+                                              <div className="text-base font-bold text-red-700 dark:text-red-400 leading-none">{compromisedCount}</div>
+                                              <div className="text-xs text-muted-foreground">{compromisedPct.toFixed(0)}%</div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {/* Attempt accordion */}
+                                  {run.attempts && run.attempts.length > 0 && (
+                                    <div>
+                                      <div className="text-sm font-medium mb-2">Test Prompts ({run.attempts.length})</div>
+                                      <div className="space-y-1.5">
+                                        {run.attempts.map((attempt, i) => {
+                                          const isAttemptOpen = runAttempts.has(i);
+                                          const tier = attempt.blocked ? 'blocked' : attempt.compromised ? 'compromised' : 'handled';
+                                          const tierBorder = tier === 'blocked' ? 'border-green-300 dark:border-green-800' : tier === 'handled' ? 'border-amber-300 dark:border-amber-700' : 'border-red-300 dark:border-red-800';
+                                          const tierBg = tier === 'blocked' ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300' : tier === 'handled' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300' : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300';
+                                          const tierBadge = tier === 'blocked' ? 'bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100' : tier === 'handled' ? 'bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100' : 'bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100';
+                                          const tierLabel = tier === 'blocked' ? 'Blocked' : tier === 'handled' ? 'Handled' : 'Compromised';
+                                          return (
+                                            <div key={i} className={cn('rounded-lg border text-sm overflow-hidden', tierBorder)}>
+                                              <button
+                                                onClick={() => {
+                                                  setExpandedRunAttempts(prev => {
+                                                    const cur = new Set(prev[run.run_id] ?? []);
+                                                    if (cur.has(i)) cur.delete(i); else cur.add(i);
+                                                    return { ...prev, [run.run_id]: cur };
+                                                  });
+                                                }}
+                                                className={cn('w-full flex items-center justify-between px-3 py-2 text-left', tierBg)}
+                                              >
+                                                <div className="flex flex-col min-w-0 gap-0.5">
+                                                  <span className="font-medium text-xs uppercase tracking-wide opacity-60">
+                                                    {attempt.goal ?? `Prompt #${i + 1}`}
+                                                  </span>
+                                                  <span className="truncate text-xs opacity-70">{attempt.prompt.slice(0, 80)}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0 ml-3">
+                                                  <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded', tierBadge)}>
+                                                    {tierLabel}
+                                                  </span>
+                                                  <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', isAttemptOpen ? 'rotate-180' : '')} />
+                                                </div>
+                                              </button>
+                                              {isAttemptOpen && (
+                                                <div className="px-3 py-3 bg-background space-y-3 border-t border-inherit">
+                                                  {attempt.goal && (
+                                                    <div className="text-xs text-muted-foreground">
+                                                      <span className="font-semibold uppercase tracking-wide">Goal:</span>{' '}
+                                                      {attempt.goal}
+                                                    </div>
+                                                  )}
+                                                  <div>
+                                                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Input</div>
+                                                    <pre className="text-xs whitespace-pre-wrap break-words bg-muted/40 rounded p-2">{attempt.prompt}</pre>
+                                                  </div>
+                                                  <div>
+                                                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                                      Output
+                                                      {attempt.statuses.length > 1 && (
+                                                        <span className="ml-1 font-normal opacity-60">(evaluated by {attempt.statuses.length} detectors)</span>
+                                                      )}
+                                                    </div>
+                                                    {attempt.blocked ? (
+                                                      <div className="text-xs text-green-700 dark:text-green-400 italic bg-green-50 dark:bg-green-900/20 rounded p-2">
+                                                        Blocked by content filter — no response returned.
+                                                      </div>
+                                                    ) : (
+                                                      <pre className="text-xs whitespace-pre-wrap break-words bg-muted/40 rounded p-2">{attempt.output ?? '(empty)'}</pre>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={promptOverride}
-                      onChange={event => setPromptOverride(event.target.value)}
-                      onKeyDown={event => {
-                        if (event.key === 'Enter' && !event.shiftKey && canRunTest) {
-                          void runTest();
-                        }
-                      }}
-                      placeholder="Enter your test prompt..."
-                      className="flex-1 px-3 py-2 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-400 dark:focus:border-orange-500 transition-all"
-                    />
-                    <button
-                      onClick={() => void runTest()}
-                      disabled={!canRunTest}
-                      className={cn(
-                        'px-4 py-2 rounded-lg font-medium transition-all',
-                        canRunTest
-                          ? 'bg-orange-600 text-white hover:bg-orange-700'
-                          : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
-                      )}
+                ) : (
+                  <div className="glass-strong p-6 rounded-xl">
+                    <h2 className="text-lg font-semibold mb-4">Test Chat</h2>
+                    <div
+                      ref={chatScrollRef}
+                      className="h-96 bg-background rounded-lg p-4 overflow-y-auto space-y-4 mb-4 border border-border"
                     >
-                      <Send className="w-4 h-4" />
-                    </button>
+                      {chatMessages.length === 0 ? (
+                        <div className="h-full flex items-center justify-center text-muted-foreground">
+                          Send a prompt to start the test
+                        </div>
+                      ) : (
+                        chatMessages.map(message => (
+                          <div
+                            key={message.id}
+                            className={cn('flex gap-3', message.role === 'user' ? 'justify-end' : 'justify-start')}
+                          >
+                            {message.role === 'assistant' && (
+                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 dark:bg-orange-500 flex items-center justify-center">
+                                <Bot className="w-4 h-4 text-white" />
+                              </div>
+                            )}
+                            <div
+                              className={cn(
+                                'max-w-md px-4 py-3 rounded-lg border text-sm',
+                                message.role === 'user'
+                                  ? 'bg-orange-600 text-white border-orange-700 rounded-br-none'
+                                  : 'bg-white dark:bg-gray-900 text-foreground border-border rounded-bl-none',
+                              )}
+                            >
+                              <div className="font-semibold mb-1 text-xs uppercase opacity-75">
+                                {message.role === 'user' ? 'You' : 'Assistant'}
+                              </div>
+                              {message.role === 'assistant' ? (
+                                <MarkdownRenderer content={message.content} />
+                              ) : (
+                                <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                              )}
+                            </div>
+                            {message.role === 'user' && (
+                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 dark:bg-orange-500 flex items-center justify-center">
+                                <User className="w-4 h-4 text-white" />
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                      {isRunning && (
+                        <div className="flex gap-3">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-600 dark:bg-orange-500 flex items-center justify-center">
+                            <Bot className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="max-w-md px-4 py-3 rounded-lg border bg-white dark:bg-gray-900 text-foreground border-border rounded-bl-none">
+                            <div className="font-semibold mb-1 text-xs uppercase opacity-75">Assistant</div>
+                            <div className="flex items-center gap-2">
+                              <span className="flex gap-1">
+                                <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" />
+                                <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
+                                <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+                              </span>
+                              <span key={loadingMessage} className="text-sm text-muted-foreground animate-in fade-in duration-500">
+                                {loadingMessage}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promptOverride}
+                        onChange={event => setPromptOverride(event.target.value)}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' && !event.shiftKey && canRunTest) {
+                            void runTest();
+                          }
+                        }}
+                        placeholder="Enter your test prompt..."
+                        className="flex-1 px-3 py-2 bg-white dark:bg-slate-800/40 border border-slate-200 dark:border-slate-600 rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-400 dark:focus:border-orange-500 transition-all"
+                      />
+                      <button
+                        onClick={() => void runTest()}
+                        disabled={!canRunTest}
+                        className={cn(
+                          'px-4 py-2 rounded-lg font-medium transition-all',
+                          canRunTest
+                            ? 'bg-orange-600 text-white hover:bg-orange-700'
+                            : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
+                        )}
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {runResult && (
+                {runResult && !isFrameworkTest && (
                   <div className="glass-strong p-6 rounded-xl space-y-4">
                     <div className="flex items-center justify-between">
                       <h2 className="text-lg font-semibold">Analysis Results</h2>
@@ -1566,6 +2005,151 @@ export function TestingPage() {
                         {(runResult.analysis.score * 100).toFixed(1)}%
                       </div>
                     </div>
+                    {runResult.report_html_url && (
+                      <a
+                        href={`http://localhost:8000${runResult.report_html_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mt-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        View Full Garak Report
+                      </a>
+                    )}
+
+                    {runResult.attempts && runResult.attempts.length > 0 && (() => {
+                      const total = runResult.attempts!.length;
+                      const blocked = runResult.attempts!.filter(a => a.blocked).length;
+                      const reached = total - blocked;
+                      const blockedPct = (blocked / total) * 100;
+                      const reachedPct = (reached / total) * 100;
+                      return (
+                        <div className="rounded-lg border border-border bg-background/40 p-4 space-y-3">
+                          <div className="text-sm font-medium">Probe Outcome Breakdown</div>
+
+                          {/* Stacked bar */}
+                          <div className="w-full h-5 rounded-full overflow-hidden flex bg-gray-200 dark:bg-gray-700">
+                            {blocked > 0 && (
+                              <div
+                                className="h-full bg-green-500 transition-all"
+                                style={{ width: `${blockedPct}%` }}
+                                title={`Blocked: ${blocked}`}
+                              />
+                            )}
+                            {reached > 0 && (
+                              <div
+                                className="h-full bg-red-500 transition-all"
+                                style={{ width: `${reachedPct}%` }}
+                                title={`Reached model: ${reached}`}
+                              />
+                            )}
+                          </div>
+
+                          {/* Legend + counts */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="flex items-center gap-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2">
+                              <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
+                              <div className="min-w-0">
+                                <div className="text-xs text-muted-foreground">Blocked</div>
+                                <div className="text-lg font-bold text-green-700 dark:text-green-400 leading-none">{blocked}</div>
+                                <div className="text-xs text-muted-foreground">{blockedPct.toFixed(0)}% of prompts</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
+                              <div className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
+                              <div className="min-w-0">
+                                <div className="text-xs text-muted-foreground">Reached model</div>
+                                <div className="text-lg font-bold text-red-700 dark:text-red-400 leading-none">{reached}</div>
+                                <div className="text-xs text-muted-foreground">{reachedPct.toFixed(0)}% of prompts</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {runResult.attempts && runResult.attempts.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium mb-2">
+                          Test Prompts ({runResult.attempts.length})
+                        </div>
+                        <div className="space-y-1.5">
+                          {runResult.attempts.map((attempt, i) => {
+                            const isOpen = expandedAttempts.has(i);
+                            return (
+                              <div
+                                key={i}
+                                className={cn(
+                                  'rounded-lg border text-sm overflow-hidden',
+                                  attempt.blocked
+                                    ? 'border-green-300 dark:border-green-800'
+                                    : 'border-red-300 dark:border-red-800',
+                                )}
+                              >
+                                <button
+                                  onClick={() => {
+                                    setExpandedAttempts(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(i)) next.delete(i);
+                                      else next.add(i);
+                                      return next;
+                                    });
+                                  }}
+                                  className={cn(
+                                    'w-full flex items-center justify-between px-3 py-2 text-left',
+                                    attempt.blocked
+                                      ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300'
+                                      : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300',
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="font-medium shrink-0">Prompt #{i + 1}</span>
+                                    <span className="truncate text-xs opacity-70">{attempt.prompt.slice(0, 72)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    <span className="text-xs opacity-60">{attempt.statuses.length} run{attempt.statuses.length !== 1 ? 's' : ''}</span>
+                                    <span className={cn(
+                                      'text-xs font-semibold px-1.5 py-0.5 rounded',
+                                      attempt.blocked
+                                        ? 'bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100'
+                                        : 'bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100',
+                                    )}>
+                                      {attempt.blocked ? 'Blocked' : 'Reached model'}
+                                    </span>
+                                    <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', isOpen ? 'rotate-180' : '')} />
+                                  </div>
+                                </button>
+                                {isOpen && (
+                                  <div className="px-3 py-3 bg-background space-y-3 border-t border-inherit">
+                                    <div>
+                                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Input</div>
+                                      <pre className="text-xs whitespace-pre-wrap break-words bg-muted/40 rounded p-2">{attempt.prompt}</pre>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                                        Output
+                                        {attempt.statuses.length > 1 && (
+                                          <span className="ml-1 font-normal opacity-60">
+                                            (same response evaluated by {attempt.statuses.length} detectors)
+                                          </span>
+                                        )}
+                                      </div>
+                                      {attempt.blocked ? (
+                                        <div className="text-xs text-green-700 dark:text-green-400 italic bg-green-50 dark:bg-green-900/20 rounded p-2">
+                                          Blocked by content filter — no response returned.
+                                        </div>
+                                      ) : (
+                                        <pre className="text-xs whitespace-pre-wrap break-words bg-muted/40 rounded p-2">{attempt.output ?? '(empty)'}</pre>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </>
@@ -1719,7 +2303,7 @@ export function TestingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setModelType('platform')}
+                      onClick={() => switchModelType('platform')}
                       className={cn(
                         'px-3 py-2 rounded-lg border text-left transition-all',
                         modelType === 'platform'
@@ -1732,7 +2316,7 @@ export function TestingPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setModelType('external')}
+                      onClick={() => switchModelType('external')}
                       className={cn(
                         'px-3 py-2 rounded-lg border text-left transition-all',
                         modelType === 'external'
@@ -1822,6 +2406,53 @@ export function TestingPage() {
                             </div>
                           )}
                         </div>
+                      </>
+                    )}
+
+                    {runnerType === 'framework' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Probe</label>
+                          <select
+                            value={probeSpec}
+                            onChange={event => setProbeSpec(event.target.value)}
+                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                          >
+                            <optgroup label="Fast (parallel)">
+                              {GARAK_PROBES.filter(p => p.speed === 'fast').map(probe => (
+                                <option key={probe.id} value={probe.id}>
+                                  {probe.label} — {probe.estimatedCalls} call{probe.estimatedCalls !== 1 ? 's' : ''}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Medium (parallel)">
+                              {GARAK_PROBES.filter(p => p.speed === 'medium').map(probe => (
+                                <option key={probe.id} value={probe.id}>
+                                  {probe.label} — {probe.estimatedCalls} calls
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Slow (sequential — parallel_attempts has no effect)">
+                              {GARAK_PROBES.filter(p => p.speed === 'slow').map(probe => (
+                                <option key={probe.id} value={probe.id}>
+                                  {probe.label} — {probe.estimatedCalls} calls
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {GARAK_PROBES.find(p => p.id === probeSpec)?.description}
+                          </p>
+                        </div>
+
+                        {GARAK_PROBES.find(p => p.id === probeSpec)?.speed === 'slow' && (
+                          <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-3 text-sm text-amber-800 dark:text-amber-300 flex gap-2">
+                            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                            <div>
+                              <span className="font-medium">Slow probe — sequential only.</span> This probe cannot be parallelised by garak. All {GARAK_PROBES.find(p => p.id === probeSpec)?.estimatedCalls} calls run one-by-one and may take several minutes.
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
                   </>
@@ -1917,7 +2548,7 @@ export function TestingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setModelType('platform')}
+                      onClick={() => switchModelType('platform')}
                       className={cn(
                         'px-3 py-2 rounded-lg border text-left transition-all',
                         modelType === 'platform'
@@ -1930,7 +2561,7 @@ export function TestingPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setModelType('external')}
+                      onClick={() => switchModelType('external')}
                       className={cn(
                         'px-3 py-2 rounded-lg border text-left transition-all',
                         modelType === 'external'
@@ -2001,6 +2632,53 @@ export function TestingPage() {
                             ))}
                           </div>
                         </div>
+                      </>
+                    )}
+
+                    {runnerType === 'framework' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Probe</label>
+                          <select
+                            value={probeSpec}
+                            onChange={event => setProbeSpec(event.target.value)}
+                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-orange-600"
+                          >
+                            <optgroup label="Fast (parallel)">
+                              {GARAK_PROBES.filter(p => p.speed === 'fast').map(probe => (
+                                <option key={probe.id} value={probe.id}>
+                                  {probe.label} — {probe.estimatedCalls} call{probe.estimatedCalls !== 1 ? 's' : ''}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Medium (parallel)">
+                              {GARAK_PROBES.filter(p => p.speed === 'medium').map(probe => (
+                                <option key={probe.id} value={probe.id}>
+                                  {probe.label} — {probe.estimatedCalls} calls
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Slow (sequential — parallel_attempts has no effect)">
+                              {GARAK_PROBES.filter(p => p.speed === 'slow').map(probe => (
+                                <option key={probe.id} value={probe.id}>
+                                  {probe.label} — {probe.estimatedCalls} calls
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {GARAK_PROBES.find(p => p.id === probeSpec)?.description}
+                          </p>
+                        </div>
+
+                        {GARAK_PROBES.find(p => p.id === probeSpec)?.speed === 'slow' && (
+                          <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-3 text-sm text-amber-800 dark:text-amber-300 flex gap-2">
+                            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                            <div>
+                              <span className="font-medium">Slow probe — sequential only.</span> This probe cannot be parallelised by garak. All {GARAK_PROBES.find(p => p.id === probeSpec)?.estimatedCalls} calls run one-by-one and may take several minutes.
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
                   </>

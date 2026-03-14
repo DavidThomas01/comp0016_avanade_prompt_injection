@@ -15,20 +15,22 @@ class RunnerSpec:
     type: RunnerType
 
     context: List[Message] = field(default_factory=list)
-    
-    
+    probe_spec: Optional[str] = None
+
+
     @classmethod
     def create_prompt(cls, context: Optional[List[Message]] = None):
         return cls(
             type=RunnerType.PROMPT,
             context=context or []
         )
-    
-    
+
+
     @classmethod
-    def create_framework(cls):
+    def create_framework(cls, probe_spec: Optional[str] = None):
         return cls(
-            type=RunnerType.FRAMEWORK
+            type=RunnerType.FRAMEWORK,
+            probe_spec=probe_spec,
         )
         
 

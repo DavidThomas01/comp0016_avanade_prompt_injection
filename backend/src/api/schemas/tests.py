@@ -61,11 +61,13 @@ class EnvironmentSpecSchema(BaseModel):
 class RunnerSpecSchema(BaseModel):
     type: RunnerType
     context: List[Message] = Field(default_factory=list)
-    
+    probe_spec: Optional[str] = None
+
     def to_dto(self) -> RunnerSpecInput:
         return RunnerSpecInput(
             type=self.type,
-            context=list(self.context) if self.context else None
+            context=list(self.context) if self.context else None,
+            probe_spec=self.probe_spec,
         )
         
 
@@ -116,8 +118,19 @@ class RunTestRequest(BaseModel):
         )
     
 
+class AttemptResult(BaseModel):
+    prompt: str
+    output: Optional[str] = None
+    blocked: bool
+    statuses: List[int] = Field(default_factory=list)
+    goal: Optional[str] = None
+    compromised: bool = False
+
+
 class RunTestReponse(BaseModel):
     output: str
     analysis: TestAnalysisSchema
     started_at: datetime
     finished_at: datetime
+    report_html_url: Optional[str] = None
+    attempts: Optional[List[AttemptResult]] = None

@@ -79,12 +79,17 @@ class Test:
         model.validate()
         runner.validate()
 
+        if runner.type == RunnerType.FRAMEWORK and model.type != ModelType.PLATFORM:
+            raise InvalidModelConfiguration("framework runner requires platform model")
+
         if model.type == ModelType.EXTERNAL:
             if environment is not None:
                 raise InvalidModelConfiguration(f"external model cannot include environment")
             return
 
         if environment is None:
+            if runner.type == RunnerType.FRAMEWORK:
+                return
             raise InvalidModelConfiguration("platform model requires environment")
 
         environment.validate()

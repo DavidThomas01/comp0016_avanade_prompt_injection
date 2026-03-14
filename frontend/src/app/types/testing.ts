@@ -28,6 +28,7 @@ export type EnvironmentSpec = {
 export type RunnerSpec = {
   type: RunnerType;
   context: Message[];
+  probe_spec?: string | null;
 };
 
 export type Test = {
@@ -54,11 +55,33 @@ export type TestAnalysis = {
   reason: string;
 };
 
+export type AttemptResult = {
+  prompt: string;
+  output: string | null;
+  blocked: boolean;
+  statuses: number[];
+  goal: string | null;
+  compromised: boolean;
+};
+
 export type RunResult = {
   output: string;
   analysis: TestAnalysis;
   started_at: string;
   finished_at: string;
+  report_html_url?: string | null;
+  attempts?: AttemptResult[] | null;
+};
+
+export type FrameworkRun = {
+  run_id: string;
+  probe_spec: string;
+  started_at: string;
+  finished_at: string;
+  output: string;
+  analysis: TestAnalysis;
+  attempts: AttemptResult[];
+  report_html_url?: string | null;
 };
 
 export type ChatMessage = {
