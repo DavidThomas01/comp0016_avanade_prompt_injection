@@ -114,7 +114,7 @@ class TestService():
         if runner_spec_input.type == RunnerType.PROMPT:
             return RunnerSpec.create_prompt(runner_spec_input.context)
         if runner_spec_input.type == RunnerType.FRAMEWORK:
-            return RunnerSpec.create_framework()
+            return RunnerSpec.create_framework(probe_spec=runner_spec_input.probe_spec)
         raise InvalidModelConfiguration(f"invalid runner type: {runner_spec_input.type}")
         
     

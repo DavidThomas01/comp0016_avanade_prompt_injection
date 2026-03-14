@@ -28,6 +28,7 @@ class EnvironmentSpecInput:
 class RunnerSpecInput:
     type: RunnerType
     context: List[Message] = field(default_factory=list)
+    probe_spec: Optional[str] = None
 
 
 @dataclass
