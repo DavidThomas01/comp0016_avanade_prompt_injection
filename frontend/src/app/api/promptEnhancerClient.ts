@@ -86,7 +86,8 @@ export async function fetchMitigations(): Promise<Mitigation[]> {
 export async function enhancePrompt(
   systemPrompt: string,
   selectedMitigationIds: string[],
-  maxRetries: number = 3
+  modelId: string = 'gpt-5-nano',
+  maxRetries: number = 1
 ): Promise<PromptEnhancementResponse> {
   const apiBase = getApiBase();
   const response = await fetch(`${apiBase}/prompt-enhancements`, {
@@ -97,7 +98,7 @@ export async function enhancePrompt(
     body: JSON.stringify({
       systemPrompt,
       selectedMitigationIds,
-      modelId: 'gpt-5-nano',
+      modelId,
       maxRetries,
     }),
   });
