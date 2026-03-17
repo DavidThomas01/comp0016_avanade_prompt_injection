@@ -331,7 +331,7 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
             <button
               type="button"
               onClick={handleAbort}
-              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-gray-700 dark:bg-gray-600 text-white hover:bg-gray-800 dark:hover:bg-gray-500 transition-colors"
+              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/40 dark:bg-white/5 text-foreground hover:bg-white/70 dark:hover:bg-white/10 border border-white/60 dark:border-white/20 shadow-sm backdrop-blur-sm transition-colors"
               aria-label="Stop generating"
               title="Stop"
             >
