@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 async def improve_prompt_structure(
     original_prompt: str,
     provider_router: ProviderRouter,
+    model_id: str,
 ) -> str:
     """
     Stage 1: Rewrite user's prompt to be better structured for AI consumption.
@@ -42,7 +43,7 @@ async def improve_prompt_structure(
     )
     
     request = ModelRequest(
-        model="gpt-5-nano",
+        model=model_id,
         messages=[Message(role="system", content=improvement_system_message),
                   Message(role="user", content=original_prompt)]
     )
@@ -94,6 +95,7 @@ async def verify_enhancement(
     enhanced_prompt: str,
     mitigation_ids: List[str],
     provider_router: ProviderRouter,
+    model_id: str,
 ) -> Dict[str, Any]:
     """
     Stage 3: Verify the enhancement is valid and meets criteria.
@@ -141,7 +143,7 @@ Respond with JSON ONLY (no markdown, no extra text):
 {{"intent_preserved": boolean, "all_mitigations_present": boolean, "unintended_changes": boolean, "coherent": boolean, "missing_mitigations": [string list], "issues": [string list], "verdict": "PASS" | "FAIL", "explanation": "brief explanation"}}"""
     
     request = ModelRequest(
-        model="gpt-5-nano",
+        model=model_id,
         messages=[
             Message(role="system", content=verification_system_message),
             Message(role="user", content=verification_user_message)
@@ -164,6 +166,7 @@ async def enhance_prompt_with_validation(
     original_prompt: str,
     mitigation_ids: List[str],
     provider_router: ProviderRouter,
+    model_id: str = "gpt-5-nano",
     max_retries: int = 3,
 ) -> Dict[str, Any]:
     """
@@ -192,7 +195,7 @@ async def enhance_prompt_with_validation(
         try:
             # Stage 1: Improve prompt structure
             logger.info(f"Enhancement attempt {attempt + 1}/{max_retries}: Stage 1 (improve)")
-            improved_prompt = await improve_prompt_structure(original_prompt, provider_router)
+            improved_prompt = await improve_prompt_structure(original_prompt, provider_router, model_id)
             
             # Stage 2: Prepend mitigations (deterministic, no retry needed)
             logger.info("Enhancement attempt: Stage 2 (prepend mitigations)")
@@ -206,6 +209,7 @@ async def enhance_prompt_with_validation(
                 enhanced_prompt=enhanced_prompt,
                 mitigation_ids=mitigation_ids,
                 provider_router=provider_router,
+                model_id=model_id,
             )
             
             # Check verdict
