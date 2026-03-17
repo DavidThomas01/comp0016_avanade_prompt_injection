@@ -1659,19 +1659,25 @@ export function TestingPage() {
                           Probe: {GARAK_PROBES.find(p => p.id === (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'))?.label ?? (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached')}
                         </div>
                       </div>
-                      <button
-                        onClick={() => void runTest()}
-                        disabled={!canRunTest}
-                        className={cn(
-                          'px-4 py-2 rounded-lg font-medium transition-all inline-flex items-center gap-2',
-                          canRunTest
-                            ? 'bg-orange-600 text-white hover:bg-orange-700'
-                            : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
-                        )}
-                      >
-                        <Send className="w-4 h-4" />
-                        Run Scan
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={exportingPdf}>
+                          <Download className="w-4 h-4" />
+                          {exportingPdf ? 'Generating...' : 'Export Report'}
+                        </Button>
+                        <button
+                          onClick={() => void runTest()}
+                          disabled={!canRunTest}
+                          className={cn(
+                            'px-4 py-2 rounded-lg font-medium transition-all inline-flex items-center gap-2',
+                            canRunTest
+                              ? 'bg-orange-600 text-white hover:bg-orange-700'
+                              : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
+                          )}
+                        >
+                          <Send className="w-4 h-4" />
+                          Run Scan
+                        </button>
+                      </div>
                     </div>
 
                     {GARAK_PROBES.find(p => p.id === (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'))?.speed === 'slow' && (
@@ -1794,18 +1800,6 @@ export function TestingPage() {
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">{(run.analysis.score * 100).toFixed(1)}%</div>
                                   </div>
-
-                                  {run.report_html_url && (
-                                    <a
-                                      href={`http://localhost:8000${run.report_html_url}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                                    >
-                                      <Download className="w-4 h-4" />
-                                      View Full Garak Report
-                                    </a>
-                                  )}
 
                                   {/* Breakdown chart */}
                                   {total > 0 && (() => {
@@ -2086,18 +2080,6 @@ export function TestingPage() {
                         {(runResult.analysis.score * 100).toFixed(1)}%
                       </div>
                     </div>
-                    {runResult.report_html_url && (
-                      <a
-                        href={`http://localhost:8000${runResult.report_html_url}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mt-2"
-                      >
-                        <Download className="w-4 h-4" />
-                        View Full Garak Report
-                      </a>
-                    )}
-
                     {runResult.attempts && runResult.attempts.length > 0 && (() => {
                       const total = runResult.attempts!.length;
                       const blocked = runResult.attempts!.filter(a => a.blocked).length;
