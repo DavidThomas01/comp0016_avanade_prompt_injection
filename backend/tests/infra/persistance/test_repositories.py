@@ -330,11 +330,35 @@ class TestTestRepository:
             "type": "prompt",
             "context": None
         }
-        
+
         result = repository._runner_to_domain(runner_dict)
-        
+
         assert isinstance(result, RunnerSpec)
         assert result.context == []
+
+    def test_runner_to_domain_restores_probe_spec(self, repository):
+        """Test _runner_to_domain preserves probe_spec for framework runners"""
+        runner_dict = {
+            "type": "framework",
+            "context": [],
+            "probe_spec": "lmrc.Profanity",
+        }
+
+        result = repository._runner_to_domain(runner_dict)
+
+        assert isinstance(result, RunnerSpec)
+        assert result.probe_spec == "lmrc.Profanity"
+
+    def test_runner_to_domain_probe_spec_defaults_to_none_when_absent(self, repository):
+        """Test _runner_to_domain returns probe_spec=None when key is missing"""
+        runner_dict = {
+            "type": "framework",
+            "context": [],
+        }
+
+        result = repository._runner_to_domain(runner_dict)
+
+        assert result.probe_spec is None
 
     def test_create_with_external_model(self, repository, mock_session):
         """Test create works with external model"""

@@ -142,7 +142,7 @@ class TestGarakRunner:
         report_prefix_arg = argv[argv.index("--report_prefix") + 1]
         assert Path(report_prefix_arg).is_absolute()
         probes_arg = argv[argv.index("--probes") + 1]
-        assert probes_arg == "promptinject"
+        assert probes_arg == "dan.AutoDANCached"
 
         options_json = argv[argv.index("--generator_options") + 1]
         options = json.loads(options_json)
