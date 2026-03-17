@@ -116,14 +116,8 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
 
     const userMessage = createMessage('user', trimmed);
     const assistantId = `assistant-${crypto.randomUUID()}`;
-    const placeholder: ChatMessage = {
-      id: assistantId,
-      role: 'assistant',
-      content: '',
-      createdAt: Date.now(),
-    };
 
-    setMessages(prev => [...prev, userMessage, placeholder]);
+    setMessages(prev => [...prev, userMessage]);
     setIsSending(true);
     streamedTextRef.current = '';
 
@@ -141,12 +135,6 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
         {
           onDelta: data => {
             streamedTextRef.current += data.text;
-            const currentText = streamedTextRef.current;
-            setMessages(prev =>
-              prev.map(m =>
-                m.id === assistantId ? { ...m, content: currentText } : m,
-              ),
-            );
           },
         },
         abort.signal,
@@ -154,16 +142,17 @@ export function ChatPanel({ variant, onClose }: ChatPanelProps) {
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (!streamedTextRef.current) {
-        streamedTextRef.current = 'Sorry, couldn\u2019t reach the server. Please try again.';
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantId
-              ? { ...m, content: streamedTextRef.current }
-              : m,
-          ),
-        );
+        streamedTextRef.current =
+          'Sorry, couldn\u2019t reach the server. Please try again.';
       }
     } finally {
+      if (streamedTextRef.current) {
+        const finalAssistant = createMessage(
+          'assistant',
+          streamedTextRef.current,
+        );
+        setMessages(prev => [...prev, finalAssistant]);
+      }
       setIsSending(false);
       abortRef.current = null;
     }

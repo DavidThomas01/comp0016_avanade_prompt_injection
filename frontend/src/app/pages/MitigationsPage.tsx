@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, Code2, Copy, Download, ShieldCheck } from 'lucide-react';
+import { Check, ChevronRight, Code2, Copy, Download, ShieldCheck } from 'lucide-react';
 
 import { mitigations, type CodeLanguage } from '../data/mitigations';
 import { Button } from '../components/ui/button';
@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from '../components/ui/dialog';
 
-import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 const LANG_OPTIONS: Array<{ value: CodeLanguage; label: string }> = [
   { value: 'pseudo', label: 'Pseudo-code' },
@@ -61,11 +61,16 @@ export function MitigationsPage() {
   }, [selected, lang]);
 
   const canCopy = typeof navigator !== 'undefined' && !!navigator.clipboard?.writeText;
+  const [copied, setCopied] = useState(false);
 
   const onCopy = async () => {
     if (!codeToShow) return;
     try {
-      if (canCopy) await navigator.clipboard.writeText(codeToShow);
+      if (canCopy) {
+        await navigator.clipboard.writeText(codeToShow);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
     } catch {
       // ignore
     }
@@ -252,40 +257,47 @@ export function MitigationsPage() {
                       </h3>
 
                       {selected.codeBased ? (
-                        <div className="flex items-center gap-2">
-                          <Tabs value={lang} onValueChange={(v) => setLang(v as CodeLanguage)}>
-                            <TabsList className="bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10">
-                              {LANG_OPTIONS.map(opt => (
-                                <TabsTrigger key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </TabsTrigger>
-                              ))}
-                            </TabsList>
-                          </Tabs>
-
-                          <button
-                            type="button"
-                            onClick={onCopy}
-                            disabled={!codeToShow || !canCopy}
-                            className={`inline-flex items-center gap-2 text-xs px-3 py-2 rounded-full border transition-all focus-ring ${
-                              !codeToShow || !canCopy
-                                ? 'text-muted-foreground border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5 cursor-not-allowed'
-                                : 'text-foreground border-white/60 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10'
-                            }`}
-                            title={canCopy ? 'Copy to clipboard' : 'Clipboard not available'}
+                        <Select
+                          value={lang}
+                          onValueChange={(v) => setLang(v as CodeLanguage)}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="w-auto min-w-[128px] bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 shrink-0"
+                            aria-label="Select implementation language"
                           >
-                            <Copy className="h-3.5 w-3.5" />
-                            Copy
-                          </button>
-                        </div>
+                            <SelectValue placeholder="Select language">
+                              {LANG_OPTIONS.find(opt => opt.value === lang)?.label ?? 'Select language'}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {LANG_OPTIONS.filter(opt => availableImplLangs.includes(opt.value)).map(opt => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       ) : null}
                     </div>
 
                     {selected.codeBased ? (
                       codeToShow ? (
-                        <pre className="bg-gray-950 text-emerald-100 p-5 rounded-2xl text-xs whitespace-pre-wrap break-words overflow-auto border border-white/10">
-                          <code>{codeToShow}</code>
-                        </pre>
+                        <div className="relative group">
+                          <pre className="bg-gray-950 text-emerald-100 p-5 pr-12 rounded-2xl text-xs whitespace-pre-wrap break-words overflow-auto border border-white/10">
+                            <code>{codeToShow}</code>
+                          </pre>
+                          <button
+                            type="button"
+                            onClick={onCopy}
+                            disabled={!canCopy}
+                            title={copied ? 'Copied!' : canCopy ? 'Copy to clipboard' : 'Clipboard not available'}
+                            aria-label={copied ? 'Copied' : 'Copy code'}
+                            className="absolute top-3 right-3 flex items-center justify-center h-8 w-8 rounded-lg text-emerald-100/70 hover:text-emerald-100 hover:bg-white/10 transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                          >
+                            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                          </button>
+                        </div>
                       ) : (
                         <p className="text-sm text-muted-foreground">
                           No snippet available for this language yet. Try another language.
