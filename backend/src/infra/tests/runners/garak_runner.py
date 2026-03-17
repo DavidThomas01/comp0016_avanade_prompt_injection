@@ -51,7 +51,7 @@ class GarakRunner(TestRunner):
         run_dir.mkdir(parents=True, exist_ok=True)
         report_prefix = run_dir / "garak"
 
-        probe_spec = test.runner.probe_spec or self.DEFAULT_PROBE_SPEC
+        probe_spec = self._resolve_probe_spec(test.runner.probe_spec)
         generator_options = self._build_generator_options(model_config)
         cli_generator_options = self._build_cli_generator_options(generator_options)
         command = [
@@ -155,6 +155,30 @@ class GarakRunner(TestRunner):
             )
         except Exception:
             pass  # non-fatal — the result is still returned to the caller
+
+    def _resolve_probe_spec(self, stored: str | None) -> str:
+        """Return a valid garak probe spec from the stored value.
+
+        A stored value that is a bare module namespace (no dot separator) is
+        not a specific probe — garak would run every probe in that module
+        sequentially, which is almost always unintentional.  Fall back to the
+        default in that case and log a warning so the issue is visible.
+        """
+        if not stored:
+            return self.DEFAULT_PROBE_SPEC
+
+        if "." not in stored:
+            import logging
+            logging.getLogger(__name__).warning(
+                "probe_spec %r looks like a bare namespace, not a specific probe. "
+                "Falling back to %r. Update the test to use a full probe ID "
+                "(e.g. 'promptinject.HijackHateHumans').",
+                stored,
+                self.DEFAULT_PROBE_SPEC,
+            )
+            return self.DEFAULT_PROBE_SPEC
+
+        return stored
 
     def _build_generator_options(self, config: ModelConfig) -> dict[str, object]:
         return {
