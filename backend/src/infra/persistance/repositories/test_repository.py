@@ -87,6 +87,7 @@ class TestRepository:
              context = [Message(**m) for m in runner["context"]]
         return RunnerSpec(
             type=RunnerType(runner["type"]),
-            context=context
+            context=context,
+            probe_spec=runner.get("probe_spec"),
         )
             
