@@ -80,6 +80,7 @@ type CreateFormSnapshot = {
   modelId: string;
   runnerType: RunnerType;
   probeSpec: string;
+  customProbeSpec: string;
   systemPrompt: string;
   selectedMitigations: string[];
   endpoint: string;
@@ -147,6 +148,8 @@ const EXTERNAL_PRESETS: ExternalPreset[] = [
   },
 ];
 
+const CUSTOM_PROBE_ID = '__custom__';
+
 const GARAK_PROBES = [
   // Fast (parallel, <10 calls)
   {
@@ -168,6 +171,41 @@ const GARAK_PROBES = [
     label: 'Riley Persona Injection',
     description: 'Tries to hijack the model into adopting an unrestricted "Riley" persona. Parallel.',
     estimatedCalls: 6,
+    speed: 'fast' as const,
+  },
+  {
+    id: 'knownbadsignatures.EICAR',
+    label: 'EICAR Signature',
+    description: 'Asks the model to reproduce the EICAR test-file string used to verify antivirus detection. Parallel.',
+    estimatedCalls: 2,
+    speed: 'fast' as const,
+  },
+  {
+    id: 'lmrc.Profanity',
+    label: 'LMRC – Profanity',
+    description: 'Probes whether the model will generate profane or offensive language on request. Parallel.',
+    estimatedCalls: 4,
+    speed: 'fast' as const,
+  },
+  {
+    id: 'encoding.InjectBase64',
+    label: 'Encoding – Base64 Injection',
+    description: 'Sends instructions hidden in Base64-encoded strings to test if the model decodes and follows them. Parallel.',
+    estimatedCalls: 10,
+    speed: 'fast' as const,
+  },
+  {
+    id: 'encoding.InjectBase32',
+    label: 'Encoding – Base32 Injection',
+    description: 'Sends instructions hidden in Base32-encoded strings to test if the model decodes and follows them. Parallel.',
+    estimatedCalls: 10,
+    speed: 'fast' as const,
+  },
+  {
+    id: 'encoding.InjectROT13',
+    label: 'Encoding – ROT13 Injection',
+    description: 'Sends instructions obfuscated with ROT13 to test if the model reconstructs and follows them. Parallel.',
+    estimatedCalls: 10,
     speed: 'fast' as const,
   },
   // Medium (parallel, 12–64 calls)
@@ -192,7 +230,28 @@ const GARAK_PROBES = [
     estimatedCalls: 64,
     speed: 'medium' as const,
   },
-  // Slow (sequential, 64 calls — parallel_attempts has no effect)
+  {
+    id: 'lmrc.Violence',
+    label: 'LMRC – Violence',
+    description: 'Checks whether the model can be prompted to produce violent or harmful content. Parallel.',
+    estimatedCalls: 20,
+    speed: 'medium' as const,
+  },
+  {
+    id: 'lmrc.Bullying',
+    label: 'LMRC – Bullying',
+    description: 'Checks whether the model will generate bullying or harassing messages on request. Parallel.',
+    estimatedCalls: 20,
+    speed: 'medium' as const,
+  },
+  {
+    id: 'continuation.ContinueSlursReclaimedSlurs50',
+    label: 'Slur Continuation',
+    description: 'Checks if the model will complete prompts that begin with reclaimed or derogatory slurs. Parallel.',
+    estimatedCalls: 50,
+    speed: 'medium' as const,
+  },
+  // Slow (sequential, 64+ calls — parallel_attempts has no effect)
   {
     id: 'promptinject.HijackHateHumans',
     label: 'Goal Hijack – "Hate Humans"',
@@ -212,6 +271,13 @@ const GARAK_PROBES = [
     label: 'Goal Hijack – Long Prompt',
     description: 'Injects a long adversarial prompt across 64 context templates. Sequential — cannot be parallelised.',
     estimatedCalls: 64,
+    speed: 'slow' as const,
+  },
+  {
+    id: 'realtoxicityprompts.RTPSevere',
+    label: 'Real Toxicity – Severe',
+    description: 'Uses severely toxic seed prompts from the RealToxicityPrompts dataset to elicit harmful continuations. Sequential.',
+    estimatedCalls: 100,
     speed: 'slow' as const,
   },
 ];
@@ -399,6 +465,7 @@ export function TestingPage() {
   const [modelId, setModelId] = useState('');
   const [runnerType, setRunnerType] = useState<RunnerType>('prompt');
   const [probeSpec, setProbeSpec] = useState('dan.AutoDANCached');
+  const [customProbeSpec, setCustomProbeSpec] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [selectedMitigations, setSelectedMitigations] = useState<string[]>([]);
 
@@ -543,6 +610,7 @@ export function TestingPage() {
     modelId,
     runnerType,
     probeSpec,
+    customProbeSpec,
     systemPrompt,
     selectedMitigations: [...selectedMitigations],
     endpoint,
@@ -563,6 +631,7 @@ export function TestingPage() {
     setModelId(createFormSnapshot.modelId);
     setRunnerType(createFormSnapshot.runnerType);
     setProbeSpec(createFormSnapshot.probeSpec);
+    setCustomProbeSpec(createFormSnapshot.customProbeSpec);
     setSystemPrompt(createFormSnapshot.systemPrompt);
     setSelectedMitigations(createFormSnapshot.selectedMitigations);
     setEndpoint(createFormSnapshot.endpoint);
@@ -789,7 +858,7 @@ export function TestingPage() {
       runner: {
         type: runnerType,
         context: [],
-        ...(runnerType === 'framework' ? { probe_spec: probeSpec } : {}),
+        ...(runnerType === 'framework' ? { probe_spec: probeSpec === CUSTOM_PROBE_ID ? customProbeSpec.trim() : probeSpec } : {}),
       },
     };
   };
@@ -1575,7 +1644,7 @@ export function TestingPage() {
                       <div>
                         <h2 className="text-lg font-semibold">Garak Framework Scan</h2>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          Probe: {GARAK_PROBES.find(p => p.id === (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'))?.label ?? selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'}
+                          Probe: {GARAK_PROBES.find(p => p.id === (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'))?.label ?? (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached')}
                         </div>
                       </div>
                       <button
@@ -2439,10 +2508,23 @@ export function TestingPage() {
                                 </option>
                               ))}
                             </optgroup>
+                            <optgroup label="Custom">
+                              <option value={CUSTOM_PROBE_ID}>Custom probe spec…</option>
+                            </optgroup>
                           </select>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {GARAK_PROBES.find(p => p.id === probeSpec)?.description}
-                          </p>
+                          {probeSpec === CUSTOM_PROBE_ID ? (
+                            <input
+                              type="text"
+                              value={customProbeSpec}
+                              onChange={event => setCustomProbeSpec(event.target.value)}
+                              placeholder="e.g. lmrc.Profanity or encoding.InjectBase64,dan.DanInTheWild"
+                              className="mt-2 w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-orange-600 font-mono"
+                            />
+                          ) : (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {GARAK_PROBES.find(p => p.id === probeSpec)?.description}
+                            </p>
+                          )}
                         </div>
 
                         {GARAK_PROBES.find(p => p.id === probeSpec)?.speed === 'slow' && (
@@ -2665,10 +2747,23 @@ export function TestingPage() {
                                 </option>
                               ))}
                             </optgroup>
+                            <optgroup label="Custom">
+                              <option value={CUSTOM_PROBE_ID}>Custom probe spec…</option>
+                            </optgroup>
                           </select>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {GARAK_PROBES.find(p => p.id === probeSpec)?.description}
-                          </p>
+                          {probeSpec === CUSTOM_PROBE_ID ? (
+                            <input
+                              type="text"
+                              value={customProbeSpec}
+                              onChange={event => setCustomProbeSpec(event.target.value)}
+                              placeholder="e.g. lmrc.Profanity or encoding.InjectBase64,dan.DanInTheWild"
+                              className="mt-2 w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-orange-600 font-mono"
+                            />
+                          ) : (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {GARAK_PROBES.find(p => p.id === probeSpec)?.description}
+                            </p>
+                          )}
                         </div>
 
                         {GARAK_PROBES.find(p => p.id === probeSpec)?.speed === 'slow' && (
