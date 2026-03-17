@@ -53,6 +53,27 @@ class TestGarakRunner:
             with pytest.raises(RuntimeError, match="garak executable not found"):
                 await runner.run(make_platform_test(), Message(role="user", content="run"))
 
+    def test_resolve_probe_spec_returns_default_when_none(self):
+        runner = GarakRunner()
+        assert runner._resolve_probe_spec(None) == GarakRunner.DEFAULT_PROBE_SPEC
+
+    def test_resolve_probe_spec_returns_default_when_bare_namespace(self):
+        runner = GarakRunner()
+        assert runner._resolve_probe_spec("promptinject") == GarakRunner.DEFAULT_PROBE_SPEC
+        assert runner._resolve_probe_spec("dan") == GarakRunner.DEFAULT_PROBE_SPEC
+        assert runner._resolve_probe_spec("lmrc") == GarakRunner.DEFAULT_PROBE_SPEC
+
+    def test_resolve_probe_spec_returns_full_dotted_spec_unchanged(self):
+        runner = GarakRunner()
+        assert runner._resolve_probe_spec("promptinject.HijackHateHumans") == "promptinject.HijackHateHumans"
+        assert runner._resolve_probe_spec("dan.AutoDANCached") == "dan.AutoDANCached"
+        assert runner._resolve_probe_spec("lmrc.Profanity") == "lmrc.Profanity"
+
+    def test_resolve_probe_spec_allows_comma_separated_custom_specs(self):
+        runner = GarakRunner()
+        spec = "encoding.InjectBase64,dan.DanInTheWild"
+        assert runner._resolve_probe_spec(spec) == spec
+
     def test_build_generator_options_for_openai_model(self):
         runner = GarakRunner()
         options = runner._build_generator_options(type("Config", (), {
