@@ -1,13 +1,14 @@
-import { Send, Copy, RefreshCw, Loader, Sparkles, CheckCircle2, ChevronDown, Check } from 'lucide-react';
+import { Send, Copy, RefreshCw, Loader, Sparkles, CheckCircle2, ChevronDown, Check, CircleHelp } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import { enhancePrompt, PromptEnhancementResponse, getPromptMitigations, PromptMitigation, Model, fetchModels } from '../api/promptEnhancerClient';
 import { useRotatingText } from '../hooks/useRotatingText';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 
 const ENHANCER_PROGRESS_MESSAGES = [
   'Analyzing prompt structure…',
   'Applying security mitigations…',
   'Verifying enhancement quality…',
-  'Finalizing enhanced prompt…',
+  'Finalizing secured prompt…',
 ];
 
 function ResultAccordion({
@@ -319,7 +320,7 @@ export function PromptEnhancerPage() {
           <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 p-6">
             <h2 className="text-lg font-semibold mb-2">Your System Prompt</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Paste your system prompt here, then generate an enhanced version with the selected mitigations.
+              Paste your system prompt here, then generate a restructured and secured version with the selected mitigations.
             </p>
 
             {/* Model Selector */}
@@ -415,11 +416,51 @@ export function PromptEnhancerPage() {
           {/* Right Panel - Results */}
           <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
             <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
-              <div>
-                <h2 className="text-lg font-semibold">Results</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Original → Improved → Enhanced
-                </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Results</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Original → Restructured → Secured
+                  </p>
+                </div>
+                <Popover>
+                  <PopoverTrigger
+                    type="button"
+                    className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-500/10 dark:hover:bg-orange-500/15 transition-colors focus-ring focus:outline-none"
+                    aria-label="What do these results mean?"
+                  >
+                    <CircleHelp className="h-4 w-4" aria-hidden />
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    side="bottom"
+                    sideOffset={6}
+                    collisionPadding={12}
+                    className="w-64 rounded-lg border border-border bg-popover text-popover-foreground shadow-md p-0 overflow-hidden"
+                  >
+                    <div className="px-4 pt-4 pb-2">
+                      <h3 className="font-semibold text-sm text-foreground">Understanding the results</h3>
+                    </div>
+                    <dl className="px-4 pb-4 space-y-4 text-xs">
+                      <div className="space-y-1">
+                        <dt className="font-medium text-foreground">Original prompt</dt>
+                        <dd className="text-muted-foreground leading-snug">Your submitted text, for comparison.</dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="font-medium text-foreground">Restructured prompt</dt>
+                        <dd className="text-muted-foreground leading-snug">Restructured for clarity; no security rules yet.</dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="font-medium text-foreground">Secured prompt</dt>
+                        <dd className="text-muted-foreground leading-snug">Use this: restructured prompt + mitigations prepended.</dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="font-medium text-foreground">Verification</dt>
+                        <dd className="text-muted-foreground leading-snug">Checks intent preserved and mitigations present.</dd>
+                      </div>
+                    </dl>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
@@ -435,7 +476,7 @@ export function PromptEnhancerPage() {
                   />
 
                   <ResultAccordion
-                    label="Improved Prompt"
+                    label="Restructured Prompt"
                     color="orange"
                     content={enhancementResult.improvedPrompt}
                     defaultOpen={true}
@@ -443,7 +484,7 @@ export function PromptEnhancerPage() {
                   />
 
                   <ResultAccordion
-                    label="Final Enhanced Prompt"
+                    label="Secured Prompt"
                     color="green"
                     content={enhancementResult.enhancedPrompt}
                     defaultOpen={true}

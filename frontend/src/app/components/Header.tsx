@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShieldCheck, Sparkles, Menu } from 'lucide-react';
+import { Sparkles, Menu } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import { useIsMobile } from './ui/use-mobile';
@@ -44,10 +44,14 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
         <Link
           to="/"
-          className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring"
+          className="flex items-center gap-3 rounded-lg px-2 py-1 hover:bg-white/60 dark:hover:bg-white/10 transition-colors focus-ring"
         >
-          <div className="h-9 w-9 rounded-xl glass flex items-center justify-center">
-            <ShieldCheck className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+          <div className="min-h-9 rounded-xl glass flex flex-col items-center justify-start px-2 pb-1">
+            <img
+              src="/logo_avanade_long.webp"
+              alt="Avanade partner"
+              className="h-8 w-auto object-contain select-none"
+            />
           </div>
           <div className="leading-tight">
             <div className="text-sm font-semibold">

@@ -16,6 +16,7 @@ import {
   User,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
 import { MarkdownRenderer } from '../assistant/MarkdownRenderer';
 import { useFetchModelsAndMitigations } from '../hooks/useFetchModelsAndMitigations';
 import { exportTestPdf } from '../lib/pdf';
@@ -55,7 +56,7 @@ const FRAMEWORK_LOADING_MESSAGES = [
 ];
 
 const LOADING_INTERVAL_MS = 3200;
-const FRAMEWORK_LOADING_INTERVAL_MS = 12000;
+const FRAMEWORK_LOADING_INTERVAL_MS = 6000;
 const API_BASE = 'http://localhost:8080/api';
 
 type ConversationMode = 'single' | 'multi';
@@ -1189,15 +1190,26 @@ export function TestingPage() {
         ]);
       }
     } catch (error) {
-      setChatMessages(prev => [
-        ...prev,
-        {
-          id: makeId(),
-          role: 'assistant',
-          content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          pending: false,
-        },
-      ]);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+
+      if (isFrameworkRun) {
+        toast.error('Garak framework scan failed', {
+          description:
+            'Check that the Garak CLI is installed, your model / API keys are configured, and then try again.\n\nDetails: ' +
+            message,
+        });
+      } else {
+        setChatMessages(prev => [
+          ...prev,
+          {
+            id: makeId(),
+            role: 'assistant',
+            content: `Error: ${message}`,
+            pending: false,
+          },
+        ]);
+      }
+
       console.error('Test run failed:', error);
     } finally {
       setIsRunning(false);
@@ -1467,10 +1479,10 @@ export function TestingPage() {
                       <button
                         onClick={() => selectTest(test.id)}
                         className={cn(
-                          'flex-1 text-left px-3 py-2 rounded-lg transition-all text-sm hover:opacity-75',
+                          'flex-1 text-left px-3 py-2 rounded-lg border transition-all text-sm hover:opacity-90',
                           selectedTest?.id === test.id
-                            ? 'bg-orange-600 text-white'
-                            : 'bg-background hover:bg-white/10 dark:hover:bg-white/5 text-foreground',
+                            ? 'bg-white/90 text-foreground border-orange-500 dark:border-orange-400 dark:bg-background/40'
+                            : 'bg-background/80 border-transparent hover:bg-white/10 dark:hover:bg-white/5 text-foreground',
                         )}
                       >
                         <div className="font-medium truncate">{test.name}</div>
