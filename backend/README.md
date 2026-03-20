@@ -16,23 +16,25 @@ Swagger docs: http://localhost:8080/docs
 
 ## Environment variables
 
-Each model reads its key from an env var defined in `src/infra/config/models.py`. You only need keys for the models you actually use.
+Each model reads its endpoint URL and API key from env vars defined in `src/infra/config/models.py`. You only need to set vars for the models you actually use.
 
-| Variable | Model |
-|---|---|
-| `FOUNDRY_GPT52_KEY` | gpt-5.2 |
-| `FOUNDRY_GPT51_KEY` | gpt-5.1 |
-| `FOUNDRY_GPT5NANO_KEY` | gpt-5-nano |
-| `FOUNDRY_O4NANO_KEY` | o4-nano |
-| `FOUNDRY_CLAUDESONNET45_KEY` | claude-sonnet-4-5 |
-| `FOUNDRY_CLAUDEHAIKU45_KEY` | claude-haiku-4-5 |
-| `FOUNDRY_CLAUDEOPUS41_KEY` | claude-opus-4-1 |
-| `FOUNDRY_LLAMA_KEY` | llama-3.3-70b |
-| `FOUNDRY_PHI_KEY` | phi-4 |
-| `FOUNDRY_DEEPSEEK_KEY` | deepseek-v3.1 |
-| `FOUNDRY_MISTRAL_KEY` | mistral-small-2503 |
+Copy `.env.example` to `.env` and fill in the values for your Azure AI Foundry deployments.
 
-See `.env.example` for a ready-to-fill template.
+| Model | Endpoint variable | Key variable |
+|---|---|---|
+| gpt-5.2 | `FOUNDRY_GPT52_ENDPOINT` | `FOUNDRY_GPT52_KEY` |
+| gpt-5.1 | `FOUNDRY_GPT51_ENDPOINT` | `FOUNDRY_GPT51_KEY` |
+| gpt-5-nano | `FOUNDRY_GPT5NANO_ENDPOINT` | `FOUNDRY_GPT5NANO_KEY` |
+| o4-nano | `FOUNDRY_O4NANO_ENDPOINT` | `FOUNDRY_O4NANO_KEY` |
+| claude-sonnet-4-5 | `FOUNDRY_CLAUDESONNET45_ENDPOINT` | `FOUNDRY_CLAUDESONNET45_KEY` |
+| claude-haiku-4-5 | `FOUNDRY_CLAUDEHAIKU45_ENDPOINT` | `FOUNDRY_CLAUDEHAIKU45_KEY` |
+| claude-opus-4-1 | `FOUNDRY_CLAUDEOPUS41_ENDPOINT` | `FOUNDRY_CLAUDEOPUS41_KEY` |
+| llama-3.3-70b | `FOUNDRY_LLAMA_ENDPOINT` | `FOUNDRY_LLAMA_KEY` |
+| phi-4 | `FOUNDRY_PHI_ENDPOINT` | `FOUNDRY_PHI_KEY` |
+| deepseek-v3.1 | `FOUNDRY_DEEPSEEK_ENDPOINT` | `FOUNDRY_DEEPSEEK_KEY` |
+| mistral-small-2503 | `FOUNDRY_MISTRAL_ENDPOINT` | `FOUNDRY_MISTRAL_KEY` |
+
+Endpoint URLs follow the Azure AI Foundry format. Find them in the Azure portal under your AI Foundry resource → **Overview** or individual model deployment pages.
 
 ## API
 

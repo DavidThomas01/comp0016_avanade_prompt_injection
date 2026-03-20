@@ -25,7 +25,7 @@ The **frontend** is a single-page React app covering vulnerabilities, mitigation
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env   # fill in your API keys
+cp .env.example .env   # fill in your Azure AI Foundry endpoints and API keys
 PYTHONPATH=src uvicorn main:app --reload --port 8080
 
 # Frontend (separate terminal)
