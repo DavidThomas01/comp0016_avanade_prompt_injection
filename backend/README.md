@@ -4,11 +4,41 @@ FastAPI + SQLite + httpx. Python >= 3.10.
 
 ## Running
 
+#### 1. Navigate to the backend
+```bash
+cd backend
+```
+
+#### 2. Create a virtual environment
 ```bash
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+```
+
+#### 3. Activate the virtual environment
+
+**macOS / Linux**
+```bash
+source .venv/bin/activate
+```
+
+**Windows**
+```bash
+.venv\Scripts\activate
+```
+
+#### 4. Install dependencies
+```bash
 pip install -e ".[dev]"
-cp .env.example .env        # fill in API keys for the models you need
+```
+
+#### 5. Configure environment variables
+```bash
+cp .env.example .env
+```
+Add your Azure AI Foundry endpoints and API keys to the `.env` file.
+
+#### 6. Start the backend server
+```bash
 PYTHONPATH=src uvicorn main:app --reload --port 8080
 ```
 
