@@ -1,13 +1,14 @@
-import { Send, Copy, RefreshCw, Loader, Sparkles, CheckCircle2, ChevronDown, Check } from 'lucide-react';
+import { Send, Copy, RefreshCw, Loader, Sparkles, CheckCircle2, ChevronDown, Check, CircleHelp } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
-import { enhancePrompt, PromptEnhancementResponse, getPromptMitigations, PromptMitigation } from '../api/promptEnhancerClient';
+import { enhancePrompt, PromptEnhancementResponse, getPromptMitigations, PromptMitigation, Model, fetchModels } from '../api/promptEnhancerClient';
 import { useRotatingText } from '../hooks/useRotatingText';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 
 const ENHANCER_PROGRESS_MESSAGES = [
   'Analyzing prompt structure…',
   'Applying security mitigations…',
   'Verifying enhancement quality…',
-  'Finalizing enhanced prompt…',
+  'Finalizing secured prompt…',
 ];
 
 function ResultAccordion({
@@ -127,10 +128,39 @@ export function PromptEnhancerPage() {
   const [error, setError] = useState<string | null>(null);
   const [mitigations, setMitigations] = useState<PromptMitigation[]>([]);
   const [loadingMitigations, setLoadingMitigations] = useState(true);
+  const [models, setModels] = useState<Model[]>([]);
+  const [loadingModels, setLoadingModels] = useState(true);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const selectedCount = selectedMitigations.length;
   const mitigationCards = useMemo(() => mitigations, [mitigations]);
 
   const progressText = useRotatingText(ENHANCER_PROGRESS_MESSAGES, 3000, loading);
+
+  // Set default model when models are loaded
+  useEffect(() => {
+    if (models.length > 0 && !selectedModel) {
+      setSelectedModel(models[0].id);
+    }
+  }, [models, selectedModel]);
+
+  // Fetch available models on mount
+  useEffect(() => {
+    async function loadModels() {
+      try {
+        setLoadingModels(true);
+        setModelsError(null);
+        const data = await fetchModels();
+        setModels(data);
+      } catch (err) {
+        setModelsError(err instanceof Error ? err.message : 'Failed to load models');
+        console.error('Error loading models:', err);
+      } finally {
+        setLoadingModels(false);
+      }
+    }
+    loadModels();
+  }, []);
 
   // Fetch available mitigations on mount
   useEffect(() => {
@@ -167,12 +197,17 @@ export function PromptEnhancerPage() {
       return;
     }
 
+    if (!selectedModel) {
+      setError('Please select a model to use for enhancement.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setEnhancementResult(null);
 
     try {
-      const result = await enhancePrompt(systemPrompt, selectedMitigations);
+      const result = await enhancePrompt(systemPrompt, selectedMitigations, selectedModel);
       setEnhancementResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to enhance prompt');
@@ -285,8 +320,40 @@ export function PromptEnhancerPage() {
           <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 p-6">
             <h2 className="text-lg font-semibold mb-2">Your System Prompt</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Paste your system prompt here, then generate an enhanced version with the selected mitigations.
+              Paste your system prompt here, then generate a restructured and secured version with the selected mitigations.
             </p>
+
+            {/* Model Selector */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-foreground mb-2">Model Selection</label>
+              <div className="relative">
+                <select
+                  value={selectedModel || ''}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={loadingModels || models.length === 0}
+                  className="w-full px-4 py-2 rounded-lg border border-white/60 dark:border-white/10 bg-white/60 dark:bg-white/5 text-foreground focus-ring appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed [color-scheme:light] dark:[color-scheme:dark]"
+                >
+                  {loadingModels ? (
+                    <option className="bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100" disabled>Loading models...</option>
+                  ) : models.length === 0 ? (
+                    <option className="bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100" disabled>No models available</option>
+                  ) : (
+                    <>
+                      <option className="bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100" value="" disabled>Select a model...</option>
+                      {models.map((model) => (
+                        <option className="bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100" key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              </div>
+              {modelsError && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">Failed to load models</p>
+              )}
+            </div>
 
             <textarea
               value={systemPrompt}
@@ -349,11 +416,51 @@ export function PromptEnhancerPage() {
           {/* Right Panel - Results */}
           <div className="glass-strong rounded-3xl border border-white/60 dark:border-white/10 overflow-hidden">
             <div className="p-4 border-b border-white/60 dark:border-white/10 bg-white/40 dark:bg-white/5">
-              <div>
-                <h2 className="text-lg font-semibold">Results</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Original → Improved → Enhanced
-                </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Results</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Original → Restructured → Secured
+                  </p>
+                </div>
+                <Popover>
+                  <PopoverTrigger
+                    type="button"
+                    className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-500/10 dark:hover:bg-orange-500/15 transition-colors focus-ring focus:outline-none"
+                    aria-label="What do these results mean?"
+                  >
+                    <CircleHelp className="h-4 w-4" aria-hidden />
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    side="bottom"
+                    sideOffset={6}
+                    collisionPadding={12}
+                    className="w-64 rounded-lg border border-border bg-popover text-popover-foreground shadow-md p-0 overflow-hidden"
+                  >
+                    <div className="px-4 pt-4 pb-2">
+                      <h3 className="font-semibold text-sm text-foreground">Understanding the results</h3>
+                    </div>
+                    <dl className="px-4 pb-4 space-y-4 text-xs">
+                      <div className="space-y-1">
+                        <dt className="font-medium text-foreground">Original prompt</dt>
+                        <dd className="text-muted-foreground leading-snug">Your submitted text, for comparison.</dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="font-medium text-foreground">Restructured prompt</dt>
+                        <dd className="text-muted-foreground leading-snug">Restructured for clarity; no security rules yet.</dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="font-medium text-foreground">Secured prompt</dt>
+                        <dd className="text-muted-foreground leading-snug">Use this: restructured prompt + mitigations prepended.</dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="font-medium text-foreground">Verification</dt>
+                        <dd className="text-muted-foreground leading-snug">Checks intent preserved and mitigations present.</dd>
+                      </div>
+                    </dl>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
@@ -369,7 +476,7 @@ export function PromptEnhancerPage() {
                   />
 
                   <ResultAccordion
-                    label="Improved Prompt"
+                    label="Restructured Prompt"
                     color="orange"
                     content={enhancementResult.improvedPrompt}
                     defaultOpen={true}
@@ -377,7 +484,7 @@ export function PromptEnhancerPage() {
                   />
 
                   <ResultAccordion
-                    label="Final Enhanced Prompt"
+                    label="Secured Prompt"
                     color="green"
                     content={enhancementResult.enhancedPrompt}
                     defaultOpen={true}

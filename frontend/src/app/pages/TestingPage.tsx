@@ -16,6 +16,7 @@ import {
   User,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
 import { MarkdownRenderer } from '../assistant/MarkdownRenderer';
 import { useFetchModelsAndMitigations } from '../hooks/useFetchModelsAndMitigations';
 import { exportTestPdf } from '../lib/pdf';
@@ -55,7 +56,7 @@ const FRAMEWORK_LOADING_MESSAGES = [
 ];
 
 const LOADING_INTERVAL_MS = 3200;
-const FRAMEWORK_LOADING_INTERVAL_MS = 12000;
+const FRAMEWORK_LOADING_INTERVAL_MS = 6000;
 const API_BASE = 'http://localhost:8080/api';
 
 type ConversationMode = 'single' | 'multi';
@@ -1189,15 +1190,26 @@ export function TestingPage() {
         ]);
       }
     } catch (error) {
-      setChatMessages(prev => [
-        ...prev,
-        {
-          id: makeId(),
-          role: 'assistant',
-          content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          pending: false,
-        },
-      ]);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+
+      if (isFrameworkRun) {
+        toast.error('Garak framework scan failed', {
+          description:
+            'Check that the Garak CLI is installed, your model / API keys are configured, and then try again.\n\nDetails: ' +
+            message,
+        });
+      } else {
+        setChatMessages(prev => [
+          ...prev,
+          {
+            id: makeId(),
+            role: 'assistant',
+            content: `Error: ${message}`,
+            pending: false,
+          },
+        ]);
+      }
+
       console.error('Test run failed:', error);
     } finally {
       setIsRunning(false);
@@ -1467,10 +1479,10 @@ export function TestingPage() {
                       <button
                         onClick={() => selectTest(test.id)}
                         className={cn(
-                          'flex-1 text-left px-3 py-2 rounded-lg transition-all text-sm hover:opacity-75',
+                          'flex-1 text-left px-3 py-2 rounded-lg border transition-all text-sm hover:opacity-90',
                           selectedTest?.id === test.id
-                            ? 'bg-orange-600 text-white'
-                            : 'bg-background hover:bg-white/10 dark:hover:bg-white/5 text-foreground',
+                            ? 'bg-white/90 text-foreground border-orange-500 dark:border-orange-400 dark:bg-background/40'
+                            : 'bg-background/80 border-transparent hover:bg-white/10 dark:hover:bg-white/5 text-foreground',
                         )}
                       >
                         <div className="font-medium truncate">{test.name}</div>
@@ -1647,19 +1659,25 @@ export function TestingPage() {
                           Probe: {GARAK_PROBES.find(p => p.id === (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'))?.label ?? (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached')}
                         </div>
                       </div>
-                      <button
-                        onClick={() => void runTest()}
-                        disabled={!canRunTest}
-                        className={cn(
-                          'px-4 py-2 rounded-lg font-medium transition-all inline-flex items-center gap-2',
-                          canRunTest
-                            ? 'bg-orange-600 text-white hover:bg-orange-700'
-                            : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
-                        )}
-                      >
-                        <Send className="w-4 h-4" />
-                        Run Scan
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={exportingPdf}>
+                          <Download className="w-4 h-4" />
+                          {exportingPdf ? 'Generating...' : 'Export Report'}
+                        </Button>
+                        <button
+                          onClick={() => void runTest()}
+                          disabled={!canRunTest}
+                          className={cn(
+                            'px-4 py-2 rounded-lg font-medium transition-all inline-flex items-center gap-2',
+                            canRunTest
+                              ? 'bg-orange-600 text-white hover:bg-orange-700'
+                              : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed',
+                          )}
+                        >
+                          <Send className="w-4 h-4" />
+                          Run Scan
+                        </button>
+                      </div>
                     </div>
 
                     {GARAK_PROBES.find(p => p.id === (selectedTest.runner.probe_spec ?? 'dan.AutoDANCached'))?.speed === 'slow' && (
@@ -1782,18 +1800,6 @@ export function TestingPage() {
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">{(run.analysis.score * 100).toFixed(1)}%</div>
                                   </div>
-
-                                  {run.report_html_url && (
-                                    <a
-                                      href={`http://localhost:8000${run.report_html_url}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                                    >
-                                      <Download className="w-4 h-4" />
-                                      View Full Garak Report
-                                    </a>
-                                  )}
 
                                   {/* Breakdown chart */}
                                   {total > 0 && (() => {
@@ -2074,18 +2080,6 @@ export function TestingPage() {
                         {(runResult.analysis.score * 100).toFixed(1)}%
                       </div>
                     </div>
-                    {runResult.report_html_url && (
-                      <a
-                        href={`http://localhost:8000${runResult.report_html_url}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mt-2"
-                      >
-                        <Download className="w-4 h-4" />
-                        View Full Garak Report
-                      </a>
-                    )}
-
                     {runResult.attempts && runResult.attempts.length > 0 && (() => {
                       const total = runResult.attempts!.length;
                       const blocked = runResult.attempts!.filter(a => a.blocked).length;

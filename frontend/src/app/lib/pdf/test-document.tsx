@@ -1,5 +1,5 @@
 import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
-import type { Test, ChatMessage, RunResult } from '../../types/testing';
+import type { Test, ChatMessage, RunResult, AttemptResult } from '../../types/testing';
 import { colors, fonts, spacing, commonStyles } from './theme';
 import {
   BrandedHeader,
@@ -70,6 +70,61 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: spacing.lg,
   },
+  attemptRow: {
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  attemptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  attemptIndex: {
+    fontSize: fonts.body,
+    fontFamily: 'Helvetica-Bold',
+    color: colors.text.primary,
+  },
+  attemptBadgeBlocked: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: colors.status.yellowLight,
+    borderWidth: 1,
+    borderColor: colors.status.yellowBorder,
+  },
+  attemptBadgeCompromised: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: colors.status.redLight,
+    borderWidth: 1,
+    borderColor: colors.status.redBorder,
+  },
+  attemptBadgeText: {
+    fontSize: fonts.tiny,
+    fontFamily: 'Helvetica-Bold',
+  },
+  attemptGoalLabel: {
+    fontSize: fonts.caption,
+    fontFamily: 'Helvetica-Bold',
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  attemptMeta: {
+    fontSize: fonts.caption,
+    color: colors.text.muted,
+    marginBottom: spacing.xs,
+  },
+  summarySnippet: {
+    fontSize: fonts.caption,
+    color: colors.text.secondary,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
 });
 
 function formatDateTime(dateStr: string): string {
@@ -100,6 +155,13 @@ function stripMarkdown(text: string): string {
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 }
 
+function attemptSnippet(attempt: AttemptResult, maxLen: number = 80): string {
+  const raw = (attempt.goal || attempt.prompt || '').trim();
+  const oneLine = raw.replace(/\s+/g, ' ').trim();
+  if (oneLine.length <= maxLen) return oneLine || '(no prompt)';
+  return oneLine.slice(0, maxLen) + '…';
+}
+
 export function TestDocument({
   test,
   chatMessages,
@@ -125,6 +187,15 @@ export function TestDocument({
   const createdAt = test.created_at ? formatDateTime(test.created_at) : 'N/A';
 
   const nonPendingMessages = chatMessages.filter((m) => !m.pending);
+
+  const attempts = (runResult?.attempts ?? []) as AttemptResult[];
+  const hasGarakAttempts = attempts.length > 0;
+  const totalAttempts = attempts.length;
+  const blockedCount = attempts.filter((a) => a.blocked).length;
+  const compromisedCount = attempts.filter((a) => a.compromised).length;
+  const pctCompromised =
+    totalAttempts > 0 ? Math.round((compromisedCount / totalAttempts) * 100) : 0;
+  const notableAttempts = attempts.filter((a) => a.compromised || !a.blocked);
 
   return (
     <Document
@@ -198,6 +269,105 @@ export function TestDocument({
             <Text style={styles.noAnalysis}>No analysis results — test has not been run yet.</Text>
           )}
         </Section>
+
+        {/* Garak Summary — only when run has attempts (framework/Garak run) */}
+        {runResult && hasGarakAttempts && (
+          <Section title="Garak Summary">
+            <InfoRow label="Total attempts" value={String(totalAttempts)} />
+            <InfoRow label="Blocked" value={String(blockedCount)} />
+            <InfoRow label="Compromised" value={String(compromisedCount)} />
+            <InfoRow label="% Compromised" value={`${pctCompromised}%`} />
+            {runResult.report_html_url ? (
+              <View style={{ marginTop: spacing.sm }}>
+                <Text
+                  style={{
+                    fontSize: fonts.caption,
+                    fontFamily: 'Helvetica-Bold',
+                    color: colors.text.primary,
+                    marginBottom: spacing.xs,
+                  }}
+                >
+                  Detailed HTML report
+                </Text>
+                <Text style={{ fontSize: fonts.caption, color: colors.text.secondary }}>
+                  {runResult.report_html_url}
+                </Text>
+              </View>
+            ) : null}
+            {notableAttempts.length > 0 && (
+              <View style={{ marginTop: spacing.md }}>
+                <Text
+                  style={{
+                    fontSize: fonts.body,
+                    fontFamily: 'Helvetica-Bold',
+                    color: colors.text.primary,
+                    marginBottom: spacing.xs,
+                  }}
+                >
+                  Notable attempts (compromised or reached model)
+                </Text>
+                {notableAttempts.map((a, i) => {
+                  const idx = attempts.indexOf(a) + 1;
+                  const status = a.compromised ? 'Compromised' : 'Reached model';
+                  return (
+                    <View key={i} style={{ marginBottom: spacing.xs }}>
+                      <Text style={styles.attemptIndex}>
+                        #{idx} — {status}
+                      </Text>
+                      <Text style={styles.summarySnippet}>{attemptSnippet(a)}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </Section>
+        )}
+
+        {/* Appendix – Garak Attempts (full detail) */}
+        {runResult && hasGarakAttempts && (
+          <SectionWrap title="Appendix – Garak Attempts">
+            {attempts.map((attempt, i) => (
+              <View key={i} style={styles.attemptRow} wrap={false}>
+                <View style={styles.attemptHeader}>
+                  <Text style={styles.attemptIndex}>Attempt {i + 1}</Text>
+                  {attempt.blocked && (
+                    <View style={styles.attemptBadgeBlocked}>
+                      <Text style={[styles.attemptBadgeText, { color: colors.status.yellow }]}>
+                        BLOCKED
+                      </Text>
+                    </View>
+                  )}
+                  {attempt.compromised && (
+                    <View style={styles.attemptBadgeCompromised}>
+                      <Text style={[styles.attemptBadgeText, { color: colors.status.red }]}>
+                        COMPROMISED
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                {attempt.goal ? (
+                  <>
+                    <Text style={styles.attemptGoalLabel}>Goal</Text>
+                    <Text style={{ fontSize: fonts.body, color: colors.text.secondary, marginBottom: spacing.xs }}>
+                      {attempt.goal}
+                    </Text>
+                  </>
+                ) : null}
+                <Text style={styles.attemptGoalLabel}>Prompt</Text>
+                <CodeBlock>{attempt.prompt || '(none)'}</CodeBlock>
+                <Text style={styles.attemptGoalLabel}>Output</Text>
+                <CodeBlock variant={attempt.compromised ? 'red' : 'default'}>
+                  {attempt.blocked ? '(blocked)' : (attempt.output ?? '(none)')}
+                </CodeBlock>
+                {attempt.statuses.length > 0 && (
+                  <Text style={styles.attemptMeta}>
+                    Statuses: [{attempt.statuses.join(', ')}]
+                  </Text>
+                )}
+              </View>
+            ))}
+          </SectionWrap>
+        )}
       </Page>
     </Document>
   );

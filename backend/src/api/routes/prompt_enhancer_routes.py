@@ -67,6 +67,7 @@ async def enhance_prompt(
             original_prompt=payload.systemPrompt,
             mitigation_ids=payload.selectedMitigationIds,
             provider_router=router_dep,
+            model_id=payload.modelId,
             max_retries=payload.maxRetries,
         )
     except EnhancementValidationError as e:
