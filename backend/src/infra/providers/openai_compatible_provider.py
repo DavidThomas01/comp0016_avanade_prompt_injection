@@ -17,7 +17,10 @@ class OpenAICompatibleProvider(ModelProvider):
 			raise ValueError(f"Unknown model '{request.model}'.")
 		if config.provider != "openai-compatible":
 			raise ValueError(f"Model '{request.model}' is not an OpenAI-compatible model.")
-		if self._is_responses_endpoint(config.endpoint):
+		endpoint = os.getenv(config.endpoint)
+		if not endpoint:
+			raise ValueError(f"Missing endpoint for '{request.model}' in env var '{config.endpoint}'.")
+		if self._is_responses_endpoint(endpoint):
 			raise ValueError(f"Model '{request.model}' uses the responses endpoint.")
 
 		api_key = os.getenv(config.api_key)
@@ -39,7 +42,7 @@ class OpenAICompatibleProvider(ModelProvider):
 		}
 
 		async with httpx.AsyncClient(timeout=self._timeout) as client:
-			response = await client.post(config.endpoint, json=payload, headers=headers)
+			response = await client.post(endpoint, json=payload, headers=headers)
 
 		if response.status_code >= 400:
 			raise RuntimeError(f"Other models provider error {response.status_code}: {response.text}")

@@ -1,5 +1,6 @@
 import ast
 import asyncio
+import dataclasses
 import json
 import os
 import re
@@ -44,6 +45,13 @@ class GarakRunner(TestRunner):
             raise RuntimeError(
                 f"Missing API key for '{test.model.model_id}' in env var '{model_config.api_key}'."
             )
+
+        endpoint = os.getenv(model_config.endpoint)
+        if not endpoint:
+            raise RuntimeError(
+                f"Missing endpoint for '{test.model.model_id}' in env var '{model_config.endpoint}'."
+            )
+        model_config = dataclasses.replace(model_config, endpoint=endpoint)
 
         started_at = datetime.now()
         run_id = uuid.uuid4().hex[:8]

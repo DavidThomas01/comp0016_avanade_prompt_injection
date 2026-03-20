@@ -22,6 +22,10 @@ class AnthropicProvider(ModelProvider):
 		if not api_key:
 			raise ValueError(f"Missing API key for '{request.model}' in env var '{config.api_key}'.")
 
+		endpoint = os.getenv(config.endpoint)
+		if not endpoint:
+			raise ValueError(f"Missing endpoint for '{request.model}' in env var '{config.endpoint}'.")
+
 		system_prompt, messages = self._build_messages(request)
 		payload: Dict[str, Any] = {
 			"model": config.model_name,
@@ -42,7 +46,7 @@ class AnthropicProvider(ModelProvider):
 		}
 
 		async with httpx.AsyncClient(timeout=self._timeout) as client:
-			response = await client.post(config.endpoint, json=payload, headers=headers)
+			response = await client.post(endpoint, json=payload, headers=headers)
 
 		if response.status_code >= 400:
 			raise RuntimeError(f"Anthropic provider error {response.status_code}: {response.text}")
