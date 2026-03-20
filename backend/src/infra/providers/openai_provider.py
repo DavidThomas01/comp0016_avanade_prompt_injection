@@ -22,12 +22,16 @@ class OpenAIProvider(ModelProvider):
 		if not api_key:
 			raise ValueError(f"Missing API key for '{request.model}' in env var '{config.api_key}'.")
 
+		endpoint = os.getenv(config.endpoint)
+		if not endpoint:
+			raise ValueError(f"Missing endpoint for '{request.model}' in env var '{config.endpoint}'.")
+
 		messages = self._build_messages(request)
 		payload: Dict[str, Any] = {
 			"model": config.model_name,
 		}
 
-		if self._is_responses_endpoint(config.endpoint):
+		if self._is_responses_endpoint(endpoint):
 			payload["input"] = [{"role": m.role, "content": m.content} for m in messages]
 		else:
 			payload["messages"] = [{"role": m.role, "content": m.content} for m in messages]
@@ -41,7 +45,7 @@ class OpenAIProvider(ModelProvider):
 		}
 
 		async with httpx.AsyncClient(timeout=self._timeout) as client:
-			response = await client.post(config.endpoint, json=payload, headers=headers)
+			response = await client.post(endpoint, json=payload, headers=headers)
 
 		if response.status_code >= 400:
 			raise UnsafePromptError(f"OpenAI provider error {response.status_code}: {response.text}")

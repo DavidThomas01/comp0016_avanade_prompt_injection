@@ -34,7 +34,7 @@ graph LR
 cd backend
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-cp .env.example .env   # fill in API keys you want to use
+cp .env.example .env   # fill in your Azure AI Foundry endpoints and API keys
 PYTHONPATH=src uvicorn main:app --reload --port 8080
 
 # Frontend (separate terminal)
