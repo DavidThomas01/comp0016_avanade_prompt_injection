@@ -27,21 +27,66 @@ graph LR
 - Node.js ≥ 18 (npm or pnpm)
 - Python ≥ 3.10
 
-### Quick start
+### Quick Start
 
+#### Backend Setup
+
+#### 1. Navigate to the backend
 ```bash
-# Backend
 cd backend
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-cp .env.example .env   # fill in your Azure AI Foundry endpoints and API keys
-PYTHONPATH=src uvicorn main:app --reload --port 8080
-
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev    # http://localhost:5173
 ```
+
+#### 2. Create a virtual environment
+```bash
+python -m venv .venv
+```
+
+#### 3. Activate the virtual environment
+
+**macOS / Linux**
+```bash
+source .venv/bin/activate
+```
+
+**Windows**
+```bash
+.venv\Scripts\activate
+```
+
+#### 4. Install dependencies
+```bash
+pip install -e ".[dev]"
+```
+
+#### 5. Configure environment variables
+```bash
+cp .env.example .env
+```
+Add your Azure AI Foundry endpoints and API keys to the `.env` file.
+
+#### 6. Start the backend server
+```bash
+PYTHONPATH=src uvicorn main:app --reload --port 8080
+```
+
+#### Frontend Setup (run in a separate terminal)
+
+#### 1. Navigate to the frontend
+```bash
+cd frontend
+```
+
+#### 2. Install dependencies
+```bash
+npm install
+```
+
+#### 3. Start the development server
+```bash
+npm run dev
+```
+
+Frontend will be available at: http://localhost:5173
 
 - Backend REST + docs: http://localhost:8080 (Swagger at `/docs`)
 - Frontend SPA: http://localhost:5173
