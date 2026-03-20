@@ -2,6 +2,14 @@
 
 Additional features implemented beyond the core project requirements.
 
+## Test Actions
+
+Comprehensive test management capabilities enabling duplication, modification, and removal of tests.
+
+## Test Configurations
+
+Customisable and reusable test configurations that can be saved, managed, and applied to streamline test execution and increase usability.
+
 ## 404 Page
 
 A branded "page not found" screen with gradient typography and a prompt-injection-themed message. Catches all unknown routes and guides users back to the home page.
