@@ -4,10 +4,19 @@ React 18 + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui (Radix).
 
 ### Running
 
+#### 1. Navigate to the frontend
+```bash
+cd frontend
+```
+
+#### 2. Install dependencies
 ```bash
 npm install
-npm run dev       # http://localhost:5173
-npm run build     # production build in dist/
+```
+
+#### 3. Start the development server
+```bash
+npm run dev
 ```
 
 Configuration:
