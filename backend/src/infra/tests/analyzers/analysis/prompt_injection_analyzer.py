@@ -24,6 +24,8 @@ class InjectionAnalysisResult:
     flags: List[str]
     detected_patterns: List[str]
     explanations: List[str] = field(default_factory=list)
+    model_resisted: bool = True
+    model_compliance_score: float = 0.0
 
 
 class PromptInjectionAnalyzer:
@@ -56,6 +58,8 @@ class PromptInjectionAnalyzer:
             risk_score = compute_risk_score(deterministic_score, ai_score)
             severity = get_severity(risk_score)
 
+            model_resisted = not ai_result.model_complied
+
             return InjectionAnalysisResult(
                 risk_score=risk_score,
                 severity=severity,
@@ -64,6 +68,8 @@ class PromptInjectionAnalyzer:
                 flags=build_flags(structural),
                 detected_patterns=build_detected_patterns(structural),
                 explanations=self._build_explanations(structural, ai_result),
+                model_resisted=model_resisted,
+                model_compliance_score=ai_result.model_compliance_score,
             )
 
         except Exception as exc:
@@ -105,5 +111,15 @@ class PromptInjectionAnalyzer:
 
         for segment in ai_result.suspicious_segments:
             explanations.append(f"[ai] Suspicious segment: \"{str(segment)[:100]}\"")
+
+        if ai_result.is_prompt_injection:
+            if ai_result.model_complied:
+                explanations.append(
+                    f"[outcome] Model COMPLIED with injection (compliance_score={ai_result.model_compliance_score:.2f})"
+                )
+            else:
+                explanations.append(
+                    f"[outcome] Model RESISTED injection attempt (compliance_score={ai_result.model_compliance_score:.2f})"
+                )
 
         return explanations
