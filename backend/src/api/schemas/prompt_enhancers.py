@@ -10,7 +10,7 @@ class PromptEnhancementCreate(BaseModel):
     systemPrompt: str
     selectedMitigationIds: List[str]
     modelId: str = "gpt-5-nano"
-    maxRetries: int = 1
+    maxRetries: int = 3
 
 
 class VerificationResult(BaseModel):

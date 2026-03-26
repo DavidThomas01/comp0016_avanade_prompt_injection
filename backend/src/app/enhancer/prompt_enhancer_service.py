@@ -82,9 +82,17 @@ def prepend_mitigations(
                 mitigation_block += f"- {config.prompt_message}\n\n"
     
     mitigation_block += "# System Instructions\n\n"
-    
+
+    final_system_instructions = improved_prompt
+    if "delimiter_tokens" in mitigation_ids:
+        final_system_instructions = (
+            "<<<SYSTEM_INSTRUCTIONS_START>>>\n"
+            f"{improved_prompt}\n"
+            "<<<SYSTEM_INSTRUCTIONS_END>>>"
+        )
+
     # Prepend mitigations
-    enhanced = mitigation_block + improved_prompt
+    enhanced = mitigation_block + final_system_instructions
     
     return enhanced
 
@@ -136,8 +144,10 @@ REQUIRED MITIGATIONS:
 Verify:
 1. Does the improved prompt preserve the exact intent and functionality of the original?
 2. Are all required mitigations present in the final prompt?
-3. Were any unintended changes or additions made?
+3. Were any unintended changes or additions made beyond the explicitly required mitigations?
 4. Is the final prompt coherent and properly structured?
+
+Important: Security guidance added from REQUIRED MITIGATIONS is intended and should NOT be flagged as an unintended change.
 
 Respond with JSON ONLY (no markdown, no extra text):
 {{"intent_preserved": boolean, "all_mitigations_present": boolean, "unintended_changes": boolean, "coherent": boolean, "missing_mitigations": [string list], "issues": [string list], "verdict": "PASS" | "FAIL", "explanation": "brief explanation"}}"""
