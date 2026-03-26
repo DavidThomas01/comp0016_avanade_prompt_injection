@@ -87,7 +87,7 @@ export async function enhancePrompt(
   systemPrompt: string,
   selectedMitigationIds: string[],
   modelId: string = 'gpt-5-nano',
-  maxRetries: number = 1
+  maxRetries: number = 3
 ): Promise<PromptEnhancementResponse> {
   const apiBase = getApiBase();
   const response = await fetch(`${apiBase}/prompt-enhancements`, {
