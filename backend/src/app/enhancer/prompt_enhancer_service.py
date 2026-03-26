@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Dict, List
 
 from domain.providers.base_provider import Message, ModelRequest
@@ -12,6 +13,23 @@ from core.exceptions import EnhancementValidationError
 
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_model_json_response(raw_text: str) -> Dict[str, Any]:
+    cleaned = raw_text.strip()
+
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+        cleaned = cleaned.strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+        raise
 
 
 async def improve_prompt_structure(
@@ -164,7 +182,7 @@ Respond with JSON ONLY (no markdown, no extra text):
     
     # Parse JSON response
     try:
-        result = json.loads(response.text)
+        result = _parse_model_json_response(response.text)
     except json.JSONDecodeError:
         logger.error(f"Failed to parse verification JSON: {response.text}")
         raise ValueError("Verification response was not valid JSON")
