@@ -9,10 +9,76 @@ from domain.providers.base_provider import Message, ModelRequest
 from app.routers.provider_router import ProviderRouter
 from infra.config.mitigations import MITIGATION_REGISTRY
 
-from core.exceptions import EnhancementValidationError
+from core.exceptions import EnhancementValidationError, UnsafePromptError
 
 
 logger = logging.getLogger(__name__)
+
+
+def _is_provider_safety_block_error(exc: Exception) -> bool:
+    """
+    Detect provider-side safety/content-filter blocking across providers.
+
+    We keep this narrow to avoid masking configuration errors such as missing
+    keys/endpoints or invalid model names.
+    """
+    if isinstance(exc, UnsafePromptError):
+        return True
+
+    msg = str(exc).lower()
+    safety_markers = [
+        "content filter",
+        "content_filter",
+        "content policy",
+        "content_policy",
+        "safety",
+        "policy violation",
+        "blocked",
+    ]
+    return any(marker in msg for marker in safety_markers)
+
+
+def _build_fallback_verification(
+    enhanced_prompt: str,
+    mitigation_ids: List[str],
+) -> Dict[str, Any]:
+    """
+    Deterministic fallback used when model-based verification is blocked by provider safety filters.
+    """
+    missing_mitigations: List[str] = []
+
+    for mid in mitigation_ids:
+        config = MITIGATION_REGISTRY.get(mid)
+        if not config or not config.prompt_message:
+            continue
+        if config.prompt_message not in enhanced_prompt:
+            missing_mitigations.append(config.name)
+
+    all_mitigations_present = len(missing_mitigations) == 0
+    coherent = bool(enhanced_prompt.strip())
+    verdict = "PASS" if all_mitigations_present and coherent else "FAIL"
+
+    issues: List[str] = []
+    if missing_mitigations:
+        issues.append("One or more required mitigation messages were not found in the final prompt.")
+    if not coherent:
+        issues.append("Enhanced prompt is empty or malformed.")
+
+    explanation = (
+        "Model-based verification was blocked by provider safety filters. "
+        "Applied deterministic verification based on mitigation inclusion checks."
+    )
+
+    return {
+        "intent_preserved": True,
+        "all_mitigations_present": all_mitigations_present,
+        "unintended_changes": False,
+        "coherent": coherent,
+        "missing_mitigations": missing_mitigations,
+        "issues": issues,
+        "verdict": verdict,
+        "explanation": explanation,
+    }
 
 
 def _parse_model_json_response(raw_text: str) -> Dict[str, Any]:
@@ -223,7 +289,17 @@ async def enhance_prompt_with_validation(
         try:
             # Stage 1: Improve prompt structure
             logger.info(f"Enhancement attempt {attempt + 1}/{max_retries}: Stage 1 (improve)")
-            improved_prompt = await improve_prompt_structure(original_prompt, provider_router, model_id)
+            try:
+                improved_prompt = await improve_prompt_structure(original_prompt, provider_router, model_id)
+            except Exception as exc:
+                if not _is_provider_safety_block_error(exc):
+                    raise
+                # If provider blocks the rewrite step, preserve the original prompt and continue.
+                logger.warning(
+                    "Provider safety filter blocked Stage 1 rewrite. "
+                    "Falling back to original prompt for enhancement."
+                )
+                improved_prompt = original_prompt
             
             # Stage 2: Prepend mitigations (deterministic, no retry needed)
             logger.info("Enhancement attempt: Stage 2 (prepend mitigations)")
@@ -231,14 +307,26 @@ async def enhance_prompt_with_validation(
             
             # Stage 3: Verify the result
             logger.info("Enhancement attempt: Stage 3 (verify)")
-            verification = await verify_enhancement(
-                original_prompt=original_prompt,
-                improved_prompt=improved_prompt,
-                enhanced_prompt=enhanced_prompt,
-                mitigation_ids=mitigation_ids,
-                provider_router=provider_router,
-                model_id=model_id,
-            )
+            try:
+                verification = await verify_enhancement(
+                    original_prompt=original_prompt,
+                    improved_prompt=improved_prompt,
+                    enhanced_prompt=enhanced_prompt,
+                    mitigation_ids=mitigation_ids,
+                    provider_router=provider_router,
+                    model_id=model_id,
+                )
+            except Exception as exc:
+                if not _is_provider_safety_block_error(exc):
+                    raise
+                logger.warning(
+                    "Provider safety filter blocked Stage 3 verification. "
+                    "Using deterministic fallback verification."
+                )
+                verification = _build_fallback_verification(
+                    enhanced_prompt=enhanced_prompt,
+                    mitigation_ids=mitigation_ids,
+                )
             
             # Check verdict
             if verification.get("verdict") == "PASS":
